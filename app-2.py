@@ -335,7 +335,7 @@ VALVE_MODELS = {
     "2\" E33": "https://example.com/models/1E31.glb",
     "4\" E33": "https://example.com/models/1_5E31.glb",
     "8\" E33": "https://example.com/models/2E31.glb",
-    "8\" E43": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje8e43.glb",
+    "8\" E43": "https://github.com/gurkan-maker/proje/raw/94a24395c07603d1f94114fb1d12672a5dcdc50b/8e43.glb",
     "12\" E33": "https://example.com/models/3E32.glb",
     "16\" E33": "https://example.com/models/4E32.glb",
     "20\" E33": "https://example.com/models/6E32.glb",
