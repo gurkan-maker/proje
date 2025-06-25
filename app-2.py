@@ -1858,10 +1858,10 @@ def valve_3d_viewer(valve_name, model_url):
                   alt="{valve_name}"
                   auto-rotate
                   camera-controls
-                  style="width: 150%; height: 1000px;">
+                  style="width: 80%; height: 1000px;">
     </model-viewer>
     """
-    components.html(html_code, height=520)
+    components.html(html_code, height=920)
 
 def main():
     st.set_page_config(
