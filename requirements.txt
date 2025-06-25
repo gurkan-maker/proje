@@ -1,0 +1,10 @@
+streamlit==1.32.2
+pandas==2.1.4
+numpy==1.26.3
+matplotlib==3.8.2
+plotly==5.18.0
+kaleido==0.2.1
+CoolProp==6.4.3
+fpdf2==2.7.7
+Pillow==10.1.0
+requests==2.31.0
