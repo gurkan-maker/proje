@@ -1858,7 +1858,7 @@ def valve_3d_viewer(valve_name, model_url):
                   alt="{valve_name}"
                   auto-rotate
                   camera-controls
-                  style="width: 100%; height: 500px;">
+                  style="width: 150%; height: 1000px;">
     </model-viewer>
     """
     components.html(html_code, height=520)
