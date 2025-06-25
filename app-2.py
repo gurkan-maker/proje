@@ -1860,10 +1860,10 @@ def valve_3d_viewer(valve_name, model_url):
                   camera-controls
                   autoplay
                   animation-name="valve_animation"
-                  style="width: 100%; height: 500px;">
+                  style="width: 100%; height: 1000px;">
     </model-viewer>
     """
-    components.html(html_code, height=520)
+    components.html(html_code, height=1000)
 
 def main():
     st.set_page_config(
