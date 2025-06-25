@@ -333,9 +333,9 @@ VALVE_DATABASE = [
 VALVE_MODELS = {
     "1\" E33": "https://example.com/models/0_5E31.glb",
     "2\" E33": "https://example.com/models/1E31.glb",
-    "4\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje8e43.glb",
-    "8\" E33": "https://github.com/gurkan-maker/proje/raw/94a24395c07603d1f94114fb1d12672a5dcdc50b/8e43.glb",
-    "8\" E43": "https://h6zcfagabwtbjri5.public.blob.vercel-storage.com/8e43-wg0eEqrfslcYlhRqoQhYcNbNpSDBqK.glb",
+    "4\" E33": "https://example.com/models/1_5E31.glb",
+    "8\" E33": "https://example.com/models/2E31.glb",
+    "8\" E43": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje8e43.glb",
     "12\" E33": "https://example.com/models/3E32.glb",
     "16\" E33": "https://example.com/models/4E32.glb",
     "20\" E33": "https://example.com/models/6E32.glb",
@@ -1609,7 +1609,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
         flow_value = st.number_input(
             flow_label, 
             min_value=0.0, 
-            max_value=1000000.0, 
+            max_value=100000.0, 
             value=scenario_data["flow"], 
             step=0.1,
             key=f"flow_{scenario_num}"
@@ -1858,10 +1858,12 @@ def valve_3d_viewer(valve_name, model_url):
                   alt="{valve_name}"
                   auto-rotate
                   camera-controls
-                  style="width: 100%; height: 1000px;">
+                  autoplay
+                  animation-name="valve_animation"
+                  style="width: 100%; height: 500px;">
     </model-viewer>
     """
-    components.html(html_code, height=920)
+    components.html(html_code, height=520)
 
 def main():
     st.set_page_config(
@@ -2337,8 +2339,7 @@ def main():
         
         if st.session_state.show_3d_viewer:
             st.subheader("3D Valve Model")
-            model_url = VALVE_MODELS.get(selected_valve_name, #"https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje-forged.glb" #
-            )
+            model_url = VALVE_MODELS.get(selected_valve_name, "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje8e43.glb")
             valve_3d_viewer(selected_valve_name, model_url)
         if st.session_state.show_simulation:
             st.subheader("Simulation Results")
