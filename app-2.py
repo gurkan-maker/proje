@@ -1609,7 +1609,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
         flow_value = st.number_input(
             flow_label, 
             min_value=0.0, 
-            max_value=100000.0, 
+            max_value=1000000.0, 
             value=scenario_data["flow"], 
             step=0.1,
             key=f"flow_{scenario_num}"
