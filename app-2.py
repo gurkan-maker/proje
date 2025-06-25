@@ -2337,7 +2337,8 @@ def main():
         
         if st.session_state.show_3d_viewer:
             st.subheader("3D Valve Model")
-            model_url = VALVE_MODELS.get(selected_valve_name, #"https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje-forged.glb" #)
+            model_url = VALVE_MODELS.get(selected_valve_name, #"https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje-forged.glb" #
+            )
             valve_3d_viewer(selected_valve_name, model_url)
         if st.session_state.show_simulation:
             st.subheader("Simulation Results")
