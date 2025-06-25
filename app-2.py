@@ -333,8 +333,8 @@ VALVE_DATABASE = [
 VALVE_MODELS = {
     "1\" E33": "https://example.com/models/0_5E31.glb",
     "2\" E33": "https://example.com/models/1E31.glb",
-    "4\" E33": "https://example.com/models/1_5E31.glb",
-    "8\" E33": "https://example.com/models/2E31.glb",
+    "4\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje8e43.glb",
+    "8\" E33": "https://github.com/gurkan-maker/proje/raw/94a24395c07603d1f94114fb1d12672a5dcdc50b/8e43.glb",
     "8\" E43": "https://cdn.jsdelivr.net/gh/gurkan-maker/proje@94a24395c07603d1f94114fb1d12672a5dcdc50b/8e43.glb",
     "12\" E33": "https://example.com/models/3E32.glb",
     "16\" E33": "https://example.com/models/4E32.glb",
@@ -2337,7 +2337,7 @@ def main():
         
         if st.session_state.show_3d_viewer:
             st.subheader("3D Valve Model")
-            model_url = VALVE_MODELS.get(selected_valve_name, "https://cdn.jsdelivr.net/gh/gurkan-maker/proje@94a24395c07603d1f94114fb1d12672a5dcdc50b/8e43.glb")
+            model_url = VALVE_MODELS.get(selected_valve_name, "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje-forged.glb")
             valve_3d_viewer(selected_valve_name, model_url)
         if st.session_state.show_simulation:
             st.subheader("Simulation Results")
