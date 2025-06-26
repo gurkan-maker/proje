@@ -336,7 +336,7 @@ VALVE_DATABASE = [
           {0:0.0, 10:10, 20:20, 30:100, 40:151.9, 50:250, 60:483, 70:750, 80:992.4, 90:1095, 100:1172.1},
           0.99,
           {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 30, 4),      
+          1, 8, 4),      
     
 ]
 
@@ -1366,12 +1366,12 @@ def evaluate_valve_for_scenario(valve, scenario):
         actual_flow_m3h = scenario['flow'] * (p_std / scenario['p1']) * (T1 / T_std) * (scenario['z'] / z_std)
         actual_flow_m3s = actual_flow_m3h / 3600
         velocity = actual_flow_m3s / valve_area
-    """ else:
+    else:
         volume_flow_m3h = scenario['flow'] / scenario['rho']
         volume_flow_m3s = volume_flow_m3h / 3600
-        velocity = volume_flow_m3s / valve_area """
+        velocity = volume_flow_m3s / valve_area
     
-    # Calculate required Cv
+    # Calculate required Cv>
     if scenario["fluid_type"] == "liquid":
         if scenario.get('fluid_library') in FLUID_LIBRARY:
             fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
