@@ -1359,11 +1359,7 @@ def evaluate_valve_for_scenario(valve, scenario):
         flow_m3s = scenario['flow'] / 3600
         velocity = flow_m3s / valve_area
     elif scenario['fluid_type'] == "gas":
-        #p_std = 1.01325
-        #T_std = 288.15
-        #z_std = 1.0
-        #T1 = scenario['temp'] + C_TO_K
-        #actual_flow_m3h = scenario['flow'] * (p_std / scenario['p1']) * (T1 / T_std) * (scenario['z'] / z_std)
+        actual_flow_m3h = scenario['flow']
         actual_flow_m3s = actual_flow_m3h / 3600
         velocity = actual_flow_m3s / valve_area
     else:
