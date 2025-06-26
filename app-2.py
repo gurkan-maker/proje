@@ -1366,10 +1366,10 @@ def evaluate_valve_for_scenario(valve, scenario):
         actual_flow_m3h = scenario['flow'] * (p_std / scenario['p1']) * (T1 / T_std) * (scenario['z'] / z_std)
         actual_flow_m3s = actual_flow_m3h / 3600
         velocity = actual_flow_m3s / valve_area
-    else:
+    """ else:
         volume_flow_m3h = scenario['flow'] / scenario['rho']
         volume_flow_m3s = volume_flow_m3h / 3600
-        velocity = volume_flow_m3s / valve_area
+        velocity = volume_flow_m3s / valve_area """
     
     # Calculate required Cv
     if scenario["fluid_type"] == "liquid":
