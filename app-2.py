@@ -1386,18 +1386,33 @@ def evaluate_valve_for_scenario(valve, scenario):
     else:
         xt = valve.get_xt_at_opening(100)
     
-    # Calculate velocity
+   # Calculate velocity
     valve_diameter_m = valve.diameter * 0.0254
     valve_area = math.pi * (valve_diameter_m/2)**2
     
     if scenario['fluid_type'] == "liquid":
         flow_m3s = scenario['flow'] / 3600
         velocity = flow_m3s / valve_area
+        
     elif scenario['fluid_type'] == "gas":
-        actual_flow_m3h = scenario['flow']
-        actual_flow_m3s = actual_flow_m3h / 3600
-        velocity = actual_flow_m3s / valve_area
-    else:
+        # Convert standard flow to actual flow at valve inlet conditions
+        T_actual = scenario['temp'] + C_TO_K  # Actual temperature in K
+        P_actual = scenario['p1'] * 1e5       # Actual pressure in Pa
+        R = 8.314462618  # Universal gas constant
+        
+        # Standard conditions (ISA standard: 15°C, 1.01325 bar)
+        T_std = 288.15  # K (15°C)
+        P_std = 1.01325 * 1e5  # Pa (1 atm)
+        
+        # Calculate actual volumetric flow
+        Q_std = scenario['flow']  # Standard volumetric flow
+        Q_actual = Q_std * (P_std / P_actual) * (T_actual / T_std) * (scenario['z'] / 1.0)
+        
+        # Convert to m³/s and calculate velocity
+        Q_actual_m3s = Q_actual / 3600
+        velocity = Q_actual_m3s / valve_area
+        
+    elif scenario['fluid_type'] == "steam":
         volume_flow_m3h = scenario['flow'] / scenario['rho']
         volume_flow_m3s = volume_flow_m3h / 3600
         velocity = volume_flow_m3s / valve_area
