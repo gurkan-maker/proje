@@ -1367,7 +1367,13 @@ def plot_flow_vs_dp_matplotlib(scenario, valve, op_point, details, req_cv):
 # RECOMMENDED VALVE LOGIC
 # ========================
 def evaluate_valve_for_scenario(valve, scenario):
-    pipe_d = scenario["pipe_d"]
+    # Determine pipe diameter based on selection
+    use_valve_size = scenario.get("use_valve_size", True)
+    if use_valve_size:
+        pipe_d = valve.diameter
+    else:
+        pipe_d = scenario["pipe_d"]
+        
     valve_d = valve.diameter
     cv_100 = valve.get_cv_at_opening(100)
     fp = calculate_piping_factor_fp(valve_d, pipe_d, cv_100)
@@ -1586,6 +1592,7 @@ def create_fluid_dropdown():
 
 def scenario_input_form(scenario_num, scenario_data=None):
     default_values = {
+        "use_valve_size": True,  # Default to True
         "sg": 1.0,
         "visc": 1.0,
         "pv": 0.023,
@@ -1593,7 +1600,8 @@ def scenario_input_form(scenario_num, scenario_data=None):
         "k": 1.4,
         "z": 1.0,
         "rho": 1.0,
-        "fluid_type": "liquid"
+        "fluid_type": "liquid",
+        "pipe_d": 2.0  # Default pipe diameter
     }
     
     if scenario_data is None:
@@ -1781,14 +1789,25 @@ def scenario_input_form(scenario_num, scenario_data=None):
                 disabled=(fluid_library != "Select Fluid Library...")
             )
         
-        pipe_d = st.number_input(
-            "Pipe Diameter (inch)", 
-            min_value=0.1, 
-            max_value=100.0, 
-            value=scenario_data["pipe_d"], 
-            step=0.1,
-            key=f"pipe_d_{scenario_num}"
+        # Add checkbox for pipe size option - default to True
+        use_valve_size = st.checkbox(
+            "Use valve size for pipe diameter?",
+            value=scenario_data.get("use_valve_size", True),
+            key=f"use_valve_size_{scenario_num}"
         )
+        
+        # Only show pipe diameter input if not using valve size
+        if not use_valve_size:
+            pipe_d = st.number_input(
+                "Pipe Diameter (inch)", 
+                min_value=0.1, 
+                max_value=100.0, 
+                value=scenario_data["pipe_d"], 
+                step=0.1,
+                key=f"pipe_d_{scenario_num}"
+            )
+        else:
+            pipe_d = scenario_data["pipe_d"]  # Keep existing value but won't be used
     
     return {
         "name": scenario_name,
@@ -1805,6 +1824,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
         "z": z if fluid_type == "gas" else scenario_data["z"],
         "rho": rho if fluid_type == "steam" else scenario_data["rho"],
         "pipe_d": pipe_d,
+        "use_valve_size": use_valve_size,
         "fluid_library": fluid_library
     }
 
@@ -2143,17 +2163,21 @@ def main():
         if not scenarios:
             st.error("Please define at least one scenario with flow > 0.")
             st.stop()
-        selected_valve_results = []
-        for scenario in scenarios:
-            result = evaluate_valve_for_scenario(selected_valve, scenario)
-            selected_valve_results.append(result)
-        recommended_valve, all_valve_results = find_recommended_valve(scenarios)
-        st.session_state.results = {
-            "selected_valve": selected_valve,
-            "selected_valve_results": selected_valve_results,
-            "recommended_valve": recommended_valve,
-            "all_valve_results": all_valve_results
-        }
+        try:
+            selected_valve_results = []
+            for scenario in scenarios:
+                result = evaluate_valve_for_scenario(selected_valve, scenario)
+                selected_valve_results.append(result)
+            recommended_valve, all_valve_results = find_recommended_valve(scenarios)
+            st.session_state.results = {
+                "selected_valve": selected_valve,
+                "selected_valve_results": selected_valve_results,
+                "recommended_valve": recommended_valve,
+                "all_valve_results": all_valve_results
+            }
+        except Exception as e:
+            st.error(f"Calculation error: {str(e)}")
+            st.error(traceback.format_exc())
     
     with tab_results:
         if st.session_state.results:
