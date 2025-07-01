@@ -389,7 +389,7 @@ def reynolds_number(flow_m3h: float, d_m: float, visc_cst: float) -> float:
         return 1e6
     N4 = CONSTANTS["N4"]["mm"]
     d_mm = d_m * 1000
-    return flow_m3h / (visc_cst * d_mm)
+    return 100000 * flow_m3h / (visc_cst * d_mm)
 
 def viscosity_correction(rev: float) -> float:
     if rev >= 40000:
