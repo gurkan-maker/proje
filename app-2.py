@@ -519,7 +519,7 @@ def cv_liquid(flow: float, p1: float, p2: float, sg: float, fl_at_op: float,
   
       
     details = {
-        'theoretical_cv': 'cv_pseudo',
+        'theoretical_cv':'cv_pseudo',
         'fp': fp,
         'fr': fr,
         'reynolds': rev,
