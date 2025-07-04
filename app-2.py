@@ -517,9 +517,16 @@ def cv_liquid(flow: float, p1: float, p2: float, sg: float, fl_at_op: float,
     corrected_cv = cv_after_fp / fr
     
   
-      
+    if dp < dp_max:
+        theoretical_cv = (flow / N1) * math.sqrt(sg / dp)
+    else:
+        theoretical_cv = (flow / N1) * math.sqrt(sg) / (fl_at_op * math.sqrt(p1 - ff * pv))
+    
+    cv_after_fp = theoretical_cv / fp
+    corrected_cv = cv_after_fp / fr
+    
     details = {
-        'theoretical_cv':'cv_pseudo',
+        'theoretical_cv': theoretical_cv,
         'fp': fp,
         'fr': fr,
         'reynolds': rev,
