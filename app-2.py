@@ -1,3 +1,5 @@
+from valve_database import load_valves_from_excel, add_valve_to_database, delete_valve_from_database, delete_valve_from_database
+from valve import Valve
 from scipy.interpolate import CubicSpline
 import streamlit as st
 import streamlit.components.v1 as components
@@ -254,120 +256,10 @@ def calculate_ff(pv: float, pc: float) -> float:
 # ========================
 # VALVE DATABASE
 # ========================
-class Valve:
-    def __init__(self, size_inch: str, rating_class: str, cv_table: dict, 
-                 fl: float, xt_table: dict, fd: float, d_inch: float,
-                 valve_type: int = 3):
-        if 0 not in cv_table:
-            cv_table[0] = 0.0
-        self.size = size_inch
-        self.rating_class = rating_class
-        self.cv_table = cv_table
-        self.fl = fl
-        self.xt_table = xt_table
-        self.xt = xt_table.get(100, 0.5)  # Default to 0.5 if 100% not available
-        self.fd = fd
-        self.diameter = d_inch
-        self.valve_type = valve_type
-        
-    def get_cv_at_opening(self, open_percent: float) -> float:
-        open_percent = max(0, min(100, open_percent))
-        if open_percent == 0:
-            return 0.0
-        keys = sorted(self.cv_table.keys())
-        for i in range(len(keys)-1):
-            if keys[i] <= open_percent <= keys[i+1]:
-                x0, x1 = keys[i], keys[i+1]
-                y0, y1 = self.cv_table[x0], self.cv_table[x1]
-                return y0 + (y1 - y0) * (open_percent - x0) / (x1 - x0)
-        if open_percent <= keys[0]:
-            return self.cv_table[keys[0]]
-        return self.cv_table[keys[-1]]
-    
-    def get_xt_at_opening(self, open_percent: float) -> float:
-        open_percent = max(10, min(100, open_percent))
-        keys = sorted(self.xt_table.keys())
-        for i in range(len(keys)-1):
-            if keys[i] <= open_percent <= keys[i+1]:
-                x0, x1 = keys[i], keys[i+1]
-                y0, y1 = self.xt_table[x0], self.xt_table[x1]
-                return y0 + (y1 - y0) * (open_percent - x0) / (x1 - x0)
-        if open_percent <= keys[0]:
-            return self.xt_table[keys[0]]
-        return self.xt_table[keys[-1]]
-
-# Existing valves converted to new format + new valves from catalogs
-VALVE_DATABASE = [
-   
-    # ======================
-    # New Valves from Catalog 12 (Whisper Trim I)
-    # ======================
-    # Valve 1 
-    Valve(1, 600,
-          {0:0.0, 10:3.28, 20:7.39, 30:12.0, 40:14.2, 50:14.9, 60:15.3, 70:15.7, 80:16.0, 90:16.4, 100:16.8},
-          0.8,
-          {10:0.581, 20:0.605, 30:0.617, 40:0.644, 50:0.764, 60:0.790, 70:0.809, 80:0.813, 90:0.795, 100:0.768},
-          1, 1.0, 3),
-    
-    # Valve 2
-    Valve(2, 600,
-          {0:0.0, 10:19.2, 20:34.6, 30:42.2, 40:45.5, 50:47.0, 60:47.1, 70:47.2, 80:47.2, 90:47.2, 100:48.0},
-          0.8,
-          {10:0.467, 20:0.318, 30:0.387, 40:0.526, 50:0.689, 60:0.843, 70:0.899, 80:0.940, 90:0.940, 100:0.938},
-          1, 2.0, 3),
-    
-    # Valve 4 
-    Valve(4, 600,
-          {0:0.0, 10:76.6, 20:117, 30:135, 40:137, 50:137, 60:141, 70:149, 80:157, 90:157, 100:169},
-          0.8,
-          {10:0.385, 20:0.352, 30:0.467, 40:0.682, 50:0.887, 60:0.977, 70:0.958, 80:0.921, 90:0.921, 100:0.811},
-          1, 4.0, 3),
-    
-    # Valve 8 
-    Valve(8, 600,
-          {0:0.0, 10:226, 20:337, 30:436, 40:502, 50:581, 60:641, 70:655, 80:659, 90:659, 100:681},
-          0.8,
-          {10:0.490, 20:0.470, 30:0.427, 40:0.452, 50:0.468, 60:0.521, 70:0.624, 80:0.703, 90:0.703, 100:0.701},
-          1, 8.0, 3),
-    
-    # ======================
-    # New Valves from Catalog 12 (Large ED/EWD)
-    # ======================
-    # Valve 12
-    Valve(12, 600,
-          {0:0.0, 10:50, 20:91, 30:141, 40:222, 50:352, 60:540, 70:797, 80:1127, 90:1361, 100:1488},
-          0.88,
-          {10:0.747, 20:0.731, 30:0.706, 40:0.650, 50:0.584, 60:0.575, 70:0.610, 80:0.679, 90:0.797, 100:0.804},
-          1, 12.0, 3),
-    
-    # Valve 16
-    Valve(16, 600,
-          {0:0.0, 10:22, 20:54, 30:86, 40:136, 50:213, 60:321, 70:477, 80:695, 90:1010, 100:1414},
-          0.85,
-          {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 16.0, 3),
-    
-    # Valve 20 
-    Valve(20, 600,
-          {0:0.0, 10:90, 20:214, 30:408, 40:733, 50:1276, 60:2122, 70:2954, 80:3661, 90:4270, 100:4820},
-          0.85,
-          {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 20.0, 3),
-    
-    # Valve 30
-    Valve(30, 600,
-          {0:0.0, 10:126, 20:305, 30:520, 40:876, 50:1343, 60:2200, 70:3599, 80:5150, 90:6563, 100:7690},
-          0.99,
-          {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 30, 3),
-    # Valve 8
-    Valve(8, 600,
-          {0:0.0, 10:10, 20:20, 30:100, 40:151.9, 50:250, 60:483, 70:750, 80:992.4, 90:1095, 100:1172.1},
-          0.99,
-          {10:0.50, 20:0.40, 30:0.30, 40:0.20, 50:0.18, 60:0.17, 70:0.16, 80:0.15, 90:0.14, 100:0.13},
-          1, 8, 4),      
-    
-]
+VALVE_DATABASE = load_valves_from_excel()
+# ========================
+# VALVE MODELS (static mapping)
+# ========================
 
 VALVE_MODELS = {
     "1\" E33": "https://example.com/models/0_5E31.glb",
@@ -384,20 +276,52 @@ VALVE_MODELS = {
 # ========================
 # CV CALCULATION MODULE
 # ========================
-def reynolds_number(flow_m3h: float, d_m: float, visc_cst: float) -> float:
+# ========================
+# REYNOLDS NUMBER CALCULATION (FIXED)
+# ========================
+def reynolds_number(flow_m3h: float, d_m: float, visc_cst: float, 
+                   F_d: float, F_L: float, C_v: float) -> float:
+    """
+    Calculate Reynolds number according to IEC standard formula:
+    
+    """
     if visc_cst < 0.1:
         return 1e6
-    N4 = CONSTANTS["N4"]["mm"]
-    d_mm = d_m * 1000
-    return 100000 * flow_m3h / (visc_cst * d_mm)
+    
+    N2 = CONSTANTS["N2"]["mm"]  # Use mm constant
+    N4 = CONSTANTS["N4"]["mm"]  # Use mm constant
 
-def viscosity_correction(rev: float) -> float:
+    D_mm = d_m * 1000  # Convert diameter to mm
+    term = ((F_L**2 * C_v**2) / (N2 * D_mm**4)) + 1
+    denominator = visc_cst * math.sqrt(F_L) * math.sqrt(C_v)
+    
+    return (N4 * F_d * flow_m3h) / denominator * term
+
+# ========================
+# REYNOLDS NUMBER FACTOR CALCULATION (FIXED)
+# ========================
+def viscosity_correction(rev: float, method: str = "size_selection") -> float:
+    """
+    Calculate FR based on Reynolds number and method:
+    - 'size_selection': For valve size selection
+    - 'flow_prediction': For flow rate prediction
+    - 'pressure_prediction': For pressure drop prediction
+    """
     if rev >= 40000:
         return 1.0
-    elif rev <= 56:
-        return 0.019 * (rev ** 0.67)
-    else:
-        return (rev / 40000) ** 0.15
+    
+    if method == "size_selection":
+        if rev < 56:
+            return 0.019 * (rev ** 0.67)
+        else:
+            # Use table values with linear interpolation
+            rev_points = [56, 66, 79, 94, 110, 130, 154, 188, 230, 278, 340, 
+                         471, 620, 980, 1560, 2470, 4600, 10200, 40000]
+            fr_points = [0.284, 0.32, 0.36, 0.40, 0.44, 0.48, 0.52, 0.56, 0.60,
+                        0.64, 0.68, 0.72, 0.76, 0.80, 0.84, 0.88, 0.92, 0.96, 1.00]
+            return np.interp(rev, rev_points, fr_points)
+    
+    return 1.0
 
 def calculate_piping_factor_fp(valve_d_inch: float, pipe_d_inch: float, cv_100: float) -> float:
     if pipe_d_inch <= valve_d_inch or abs(pipe_d_inch - valve_d_inch) < 0.01:
@@ -410,18 +334,18 @@ def calculate_piping_factor_fp(valve_d_inch: float, pipe_d_inch: float, cv_100: 
 
 def calculate_flp(valve, valve_d_inch: float, pipe_d_inch: float, cv_100: float) -> float:
     if abs(pipe_d_inch - valve_d_inch) < 0.01:
-        return valve.fl
+        return valve.get_fl_at_opening(100)  # Use max opening FL for FLP calculation
     d_ratio = valve_d_inch / pipe_d_inch
     K1 = 0.5 * (1 - d_ratio**2)**2
     KB1 = 1 - d_ratio**4
     Ki = K1 + KB1
-    term = (Ki / CONSTANTS["N2"]["inch"]) * (cv_100 / valve_d_inch**2)**2 + 1/valve.fl**2
+    term = (Ki / CONSTANTS["N2"]["inch"]) * (cv_100 / valve_d_inch**2)**2 + 1/valve.get_fl_at_opening(100)**2
     FLP = 1 / math.sqrt(term)
     return FLP
 
 def calculate_x_tp(valve, valve_d_inch: float, pipe_d_inch: float, Fp: float) -> float:
     if abs(pipe_d_inch - valve_d_inch) < 0.01:
-        return valve.xt
+        return valve.get_xt_at_opening(100)
     xT = valve.get_xt_at_opening(100)
     d_ratio = valve_d_inch / pipe_d_inch
     K1 = 0.5 * (1 - d_ratio**2)**2
@@ -432,8 +356,12 @@ def calculate_x_tp(valve, valve_d_inch: float, pipe_d_inch: float, Fp: float) ->
     xTP = xT / Fp**2 * (1 / term)
     return xTP
 
-def cv_liquid(flow: float, p1: float, p2: float, sg: float, fl: float, 
-              pv: float, pc: float, visc_cst: float, d_m: float, fp: float = 1.0) -> tuple:
+# ========================
+# UPDATED CV_LIQUID FUNCTION (FIXED)
+# ========================
+def cv_liquid(flow: float, p1: float, p2: float, sg: float, fl_at_op: float, 
+              pv: float, pc: float, visc_cst: float, d_m: float, 
+              valve, fp: float = 1.0) -> tuple:
     if p1 <= 0 or p2 < 0 or p1 <= p2:
         return 0, {'error': 'Invalid pressures', 'theoretical_cv': 0, 'fp': fp, 'fr': 1.0, 'reynolds': 0, 'is_choked': False, 'ff': 0, 'dp_max': 0}
     
@@ -442,49 +370,71 @@ def cv_liquid(flow: float, p1: float, p2: float, sg: float, fl: float,
     if dp <= 0:
         return 0, {'theoretical_cv': 0, 'fp': fp, 'fr': 1.0, 'reynolds': 0, 'is_choked': False, 'ff': 0, 'dp_max': 0}
     
+    # Calculate Ff (fluid property only)
     ff = calculate_ff(pv, pc)
-    dp_max = fl**2 * (p1 - ff * pv)
     
-    if dp < dp_max:
-        cv_pseudo = (flow / N1) * math.sqrt(sg / dp)
-    else:
-        cv_pseudo = (flow / N1) * math.sqrt(sg) / (fl * math.sqrt(p1 - ff * pv))
+    # Calculate theoretical Cv (valve-independent)
+    dp_max_fluid = p1 - ff * pv
+    if dp_max_fluid <= 0:
+        dp_max_fluid = float('inf')  # No choking possible
     
-    rev = reynolds_number(flow, d_m, visc_cst)
-    fr = viscosity_correction(rev)
-    
-    if dp < dp_max:
+    if dp < dp_max_fluid:
         theoretical_cv = (flow / N1) * math.sqrt(sg / dp)
     else:
-        theoretical_cv = (flow / N1) * math.sqrt(sg) / (fl * math.sqrt(p1 - ff * pv))
+        theoretical_cv = (flow / N1) * math.sqrt(sg) / math.sqrt(dp_max_fluid)
     
-    cv_after_fp = theoretical_cv / fp
+    # Calculate max allowable pressure drop for the valve (uses Fl)
+    dp_max_valve = fl_at_op**2 * (p1 - ff * pv)
+    if dp_max_valve <= 0:
+        dp_max_valve = float('inf')  # No choking possible
+    
+    # Calculate pseudo Cv (valve-specific but without viscosity correction)
+    if dp < dp_max_valve:
+        cv_pseudo = (flow / N1) * math.sqrt(sg / dp)
+    else:
+        cv_pseudo = (flow / N1) * math.sqrt(sg) / (fl_at_op * math.sqrt(p1 - ff * pv))
+
+    # Calculate Reynolds number with correct formula
+    rev = reynolds_number(
+        flow_m3h=flow,
+        d_m=d_m,
+        visc_cst=visc_cst,
+        F_d=valve.fd,
+        F_L=fl_at_op,
+        C_v=cv_pseudo
+    )
+    
+    # Use viscosity correction for valve size selection
+    fr = viscosity_correction(rev, method="size_selection")
+    
+    # Apply corrections
+    cv_after_fp = cv_pseudo / fp
     corrected_cv = cv_after_fp / fr
     
     details = {
-        'theoretical_cv': theoretical_cv,
+        'theoretical_cv': theoretical_cv,  # This is now valve-independent
         'fp': fp,
         'fr': fr,
         'reynolds': rev,
-        'is_choked': (dp >= dp_max),
+        'is_choked': (dp >= dp_max_valve),
         'ff': ff,
-        'dp_max': dp_max,
-        'fl': fl
+        'dp_max': dp_max_valve,
+        'fl_at_op': fl_at_op
     }
     
     return corrected_cv, details
 
 def cv_gas(flow: float, p1: float, p2: float, sg: float, t: float, k: float, 
-           xt: float, z: float, fp: float = 1.0) -> tuple:
+           xt_at_op: float, z: float, fp: float = 1.0) -> tuple:
     if p1 <= 0 or p2 < 0 or p1 <= p2:
-        return 0, {'error': 'Invalid pressures', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': 0, 'xt': xt}
+        return 0, {'error': 'Invalid pressures', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': 0, 'xt_at_op': xt_at_op}
     
     x_actual = (p1 - p2) / p1
     if x_actual <= 0:
-        return 0, {'error': 'Negative pressure drop', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': x_actual, 'xt': xt}
+        return 0, {'error': 'Negative pressure drop', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': x_actual, 'xt_at_op': xt_at_op}
     
     fk = k / 1.4
-    x_crit = fk * xt
+    x_crit = fk * xt_at_op
     
     if x_actual >= x_crit:
         y = 0.667
@@ -492,13 +442,13 @@ def cv_gas(flow: float, p1: float, p2: float, sg: float, t: float, k: float,
         is_choked = True
     else:
         x = x_actual
-        y = 1 - x / (3 * fk * xt)
+        y = 1 - x / (3 * fk * xt_at_op)
         is_choked = False
     
     N7 = CONSTANTS["N7"]["m³/h, bar, K (standard)"]
     term = (sg * (t + C_TO_K) * z) / x
     if term < 0:
-        return 0, {'error': 'Negative value in sqrt', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': y, 'is_choked': is_choked, 'x_crit': x_crit, 'x_actual': x_actual, 'xt': xt}
+        return 0, {'error': 'Negative value in sqrt', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': y, 'is_choked': is_choked, 'x_crit': x_crit, 'x_actual': x_actual, 'xt_at_op': xt_at_op}
     
     theoretical_cv = (flow / (N7 * fp * p1 * y)) * math.sqrt(term)
     corrected_cv = theoretical_cv
@@ -510,22 +460,22 @@ def cv_gas(flow: float, p1: float, p2: float, sg: float, t: float, k: float,
         'is_choked': is_choked,
         'x_crit': x_crit,
         'x_actual': x_actual,
-        'xt': xt
+        'xt_at_op': xt_at_op
     }
     
     return corrected_cv, details
 
 def cv_steam(flow: float, p1: float, p2: float, rho: float, k: float, 
-             xt: float, fp: float = 1.0) -> tuple:
+             xt_at_op: float, fp: float = 1.0) -> tuple:
     if p1 <= 0 or p2 < 0 or p1 <= p2:
-        return 0, {'error': 'Invalid pressures', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': 0, 'xt': xt}
+        return 0, {'error': 'Invalid pressures', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': 0, 'xt_at_op': xt_at_op}
     
     x_actual = (p1 - p2) / p1
     if x_actual <= 0:
-        return 0, {'error': 'Negative pressure drop', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': x_actual, 'xt': xt}
+        return 0, {'error': 'Negative pressure drop', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': 0, 'is_choked': False, 'x_crit': 0, 'x_actual': x_actual, 'xt_at_op': xt_at_op}
     
     fk = k / 1.4
-    x_crit = fk * xt
+    x_crit = fk * xt_at_op
     
     if x_actual >= x_crit:
         y = 0.667
@@ -533,13 +483,13 @@ def cv_steam(flow: float, p1: float, p2: float, rho: float, k: float,
         is_choked = True
     else:
         x = x_actual
-        y = 1 - x / (3 * fk * xt)
+        y = 1 - x / (3 * fk * xt_at_op)
         is_choked = False
     
     N6 = CONSTANTS["N6"]["kg/h, bar, kg/m³"]
     term = x * p1 * rho
     if term <= 0:
-        return 0, {'error': 'Invalid term in sqrt', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': y, 'is_choked': is_choked, 'x_crit': x_crit, 'x_actual': x_actual, 'xt': xt}
+        return 0, {'error': 'Invalid term in sqrt', 'theoretical_cv': 0, 'fp': fp, 'expansion_factor': y, 'is_choked': is_choked, 'x_crit': x_crit, 'x_actual': x_actual, 'xt_at_op': xt_at_op}
     
     theoretical_cv = flow / (N6 * y * math.sqrt(term))
     corrected_cv = theoretical_cv / fp
@@ -551,12 +501,12 @@ def cv_steam(flow: float, p1: float, p2: float, rho: float, k: float,
         'is_choked': is_choked,
         'x_crit': x_crit,
         'x_actual': x_actual,
-        'xt': xt
+        'xt_at_op': xt_at_op
     }
     
     return corrected_cv, details
 
-def check_cavitation(p1: float, p2: float, pv: float, fl: float, pc: float) -> tuple:
+def check_cavitation(p1: float, p2: float, pv: float, fl_at_op: float, pc: float) -> tuple:
     if pc <= 0:
         return False, 0, 0, "Critical pressure not available"
     if p1 <= 0 or p2 < 0 or p1 <= p2:
@@ -565,8 +515,8 @@ def check_cavitation(p1: float, p2: float, pv: float, fl: float, pc: float) -> t
     dp = p1 - p2
     if dp <= 0:
         return False, 0, 0, "No pressure drop"
-    dp_max = fl**2 * (p1 - ff * pv)
-    km = fl**2
+    dp_max = fl_at_op**2 * (p1 - ff * pv)
+    km = fl_at_op**2
     sigma = (p1 - pv) / dp
     if dp >= dp_max:
         return True, sigma, km, "Choked flow - cavitation likely"
@@ -577,6 +527,7 @@ def check_cavitation(p1: float, p2: float, pv: float, fl: float, pc: float) -> t
     elif sigma < 4 * km:
         return False, sigma, km, "Mild cavitation risk"
     return False, sigma, km, "Minimal cavitation risk"
+
 
 # ========================
 # ENHANCED PDF REPORT GENERATION
@@ -836,8 +787,8 @@ def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitati
             ("Valve Size:", f"{valve.size}\""),
             ("Type:", "Globe" if valve.valve_type == 3 else "Axial"),
             ("Rating Class:", str(valve.rating_class)),
-            ("Fl (Liquid Recovery):", f"{valve.fl:.3f}"),
-            ("Xt (Pressure Drop Ratio):", f"{valve.xt:.3f}"),
+            ("Fl (Liquid Recovery):", f"{valve.get_fl_at_opening(100):.3f}"),
+            ("Xt (Pressure Drop Ratio):", f"{valve.get_xt_at_opening(100):.3f}"),
             ("Fd (Valve Style Modifier):", f"{valve.fd:.2f}"),
             ("Internal Diameter:", f"{valve.diameter:.2f} in"),
             ("Manufacturer:", "VASTAŞ Valves")
@@ -849,6 +800,18 @@ def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitati
         for open_percent, cv in valve.cv_table.items():
             cv_table_data.append([f"{open_percent}%", f"{cv:.1f}"])
         pdf.add_table(['Opening %', 'Cv Value'], cv_table_data, col_widths=[50, 50])
+        
+        pdf.chapter_title('Valve Fl Characteristics')
+        fl_table_data = []
+        for open_percent, fl in valve.fl_table.items():
+            fl_table_data.append([f"{open_percent}%", f"{fl:.3f}"])
+        pdf.add_table(['Opening %', 'Fl Value'], fl_table_data, col_widths=[50, 50])
+        
+        pdf.chapter_title('Valve Xt Characteristics')
+        xt_table_data = []
+        for open_percent, xt in valve.xt_table.items():
+            xt_table_data.append([f"{open_percent}%", f"{xt:.3f}"])
+        pdf.add_table(['Opening %', 'Xt Value'], xt_table_data, col_widths=[50, 50])
         
         # Sizing Results Summary
         pdf.add_page()
@@ -868,6 +831,8 @@ def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitati
                 status = "⚠️ Low Opening"
             elif "Choked" in cavitation_info[i]:
                 status = "❌ Choked Flow"
+            elif "Insufficient" in warnings[i]:
+                status = "❌ Insufficient Capacity"
             
             results_data.append([
                 scenario["name"],
@@ -1090,7 +1055,7 @@ def generate_flow_vs_dp_graph(scenario, valve, op_point, details, req_cv):
         if x_crit <= 0:
             # Calculate from k and xt if available
             k = scenario.get('k', 1.4)
-            xt = details.get('xt', 0.5)
+            xt = details.get('xt_at_op', 0.5)
             fk = k / 1.4
             x_crit = fk * xt
         max_dp = x_crit * scenario['p1']
@@ -1104,20 +1069,20 @@ def generate_flow_vs_dp_graph(scenario, valve, op_point, details, req_cv):
     
     # Calculate flow rates for each dp
     for dp in dp_range:
-        if scenario['fluid_type'] == "liquid":
+        if scenario["fluid_type"] == "liquid":
             if dp <= details.get('dp_max', dp):
                 flow = valve_cv_effective * CONSTANTS["N1"]["m³/h, bar"] * math.sqrt(dp / scenario['sg'])
             else:
-                flow = valve_cv_effective * CONSTANTS["N1"]["m³/h, bar"] * details.get('fl', 0.9) * math.sqrt(
+                flow = valve_cv_effective * CONSTANTS["N1"]["m³/h, bar"] * details.get('fl_at_op', 0.9) * math.sqrt(
                     (scenario['p1'] - details.get('ff', 0.96) * scenario.get('pv', 0)) / scenario['sg'])
             flow_rates.append(flow)
             
-        elif scenario['fluid_type'] == "gas":
+        elif scenario["fluid_type"] == "gas":
             x = dp / scenario['p1']
             x_crit = details.get('x_crit', 0.5)
             fk = scenario['k'] / 1.4
             if x < x_crit:
-                Y = 1 - x / (3 * fk * details.get('xt', 0.5))
+                Y = 1 - x / (3 * fk * details.get('xt_at_op', 0.5))
             else:
                 Y = 0.667
                 x = x_crit
@@ -1125,12 +1090,12 @@ def generate_flow_vs_dp_graph(scenario, valve, op_point, details, req_cv):
                 x / (scenario['sg'] * (scenario['temp'] + C_TO_K) * scenario['z']))
             flow_rates.append(flow)
             
-        elif scenario['fluid_type'] == "steam":
+        elif scenario["fluid_type"] == "steam":
             x = dp / scenario['p1']
             x_crit = details.get('x_crit', 0.5)
             fk = scenario['k'] / 1.4
             if x < x_crit:
-                Y = 1 - x / (3 * fk * details.get('xt', 0.5))
+                Y = 1 - x / (3 * fk * details.get('xt_at_op', 0.5))
             else:
                 Y = 0.667
                 x = x_crit
@@ -1271,7 +1236,7 @@ def plot_flow_vs_dp_matplotlib(scenario, valve, op_point, details, req_cv):
         x_crit = details.get('x_crit', 0)
         if x_crit <= 0:
             k = scenario.get('k', 1.4)
-            xt = details.get('xt', 0.5)
+            xt = details.get('xt_at_op', 0.5)
             fk = k / 1.4
             x_crit = fk * xt
         max_dp = x_crit * scenario['p1']
@@ -1289,7 +1254,7 @@ def plot_flow_vs_dp_matplotlib(scenario, valve, op_point, details, req_cv):
             if dp <= details.get('dp_max', dp):
                 flow = valve_cv_effective * CONSTANTS["N1"]["m³/h, bar"] * math.sqrt(dp / scenario['sg'])
             else:
-                flow = valve_cv_effective * CONSTANTS["N1"]["m³/h, bar"] * details.get('fl', 0.9) * math.sqrt(
+                flow = valve_cv_effective * CONSTANTS["N1"]["m³/h, bar"] * details.get('fl_at_op', 0.9) * math.sqrt(
                     (scenario['p1'] - details.get('ff', 0.96) * scenario.get('pv', 0)) / scenario['sg'])
             flow_rates.append(flow)
         elif scenario['fluid_type'] == "gas":
@@ -1297,7 +1262,7 @@ def plot_flow_vs_dp_matplotlib(scenario, valve, op_point, details, req_cv):
             x_crit = details.get('x_crit', 0.5)
             fk = scenario['k'] / 1.4
             if x < x_crit:
-                Y = 1 - x / (3 * fk * details.get('xt', 0.5))
+                Y = 1 - x / (3 * fk * details.get('xt_at_op', 0.5))
             else:
                 Y = 0.667
                 x = x_crit
@@ -1309,7 +1274,7 @@ def plot_flow_vs_dp_matplotlib(scenario, valve, op_point, details, req_cv):
             x_crit = details.get('x_crit', 0.5)
             fk = scenario['k'] / 1.4
             if x < x_crit:
-                Y = 1 - x / (3 * fk * details.get('xt', 0.5))
+                Y = 1 - x / (3 * fk * details.get('xt_at_op', 0.5))
             else:
                 Y = 0.667
                 x = x_crit
@@ -1417,7 +1382,7 @@ def evaluate_valve_for_scenario(valve, scenario):
         volume_flow_m3s = volume_flow_m3h / 3600
         velocity = volume_flow_m3s / valve_area
     
-    # Calculate required Cv>
+    # Calculate required Cv
     if scenario["fluid_type"] == "liquid":
         if scenario.get('fluid_library') in FLUID_LIBRARY:
             fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
@@ -1426,22 +1391,58 @@ def evaluate_valve_for_scenario(valve, scenario):
             if "pc_func" in fluid_data:
                 scenario["pc"] = fluid_data["pc_func"]()
         
+        # Get Fl at operating point (will be updated in second pass)
+        fl_at_op = valve.get_fl_at_opening(50)  # Initial guess at 50% opening
+        
         cv_req, details = cv_liquid(
             flow=scenario["flow"],
             p1=scenario["p1"],
             p2=scenario["p2"],
             sg=scenario["sg"],
-            fl=valve.fl,
+            fl_at_op=fl_at_op,
             pv=scenario["pv"],
             pc=scenario["pc"],
             visc_cst=scenario["visc"],
             d_m=valve.diameter * 0.0254,
+            valve=valve,
             fp=fp
         )
         
+        # First pass: calculate operating point with initial Fl
+        open_percent = 10
+        while open_percent <= 100:
+            cv_valve = valve.get_cv_at_opening(open_percent)
+            if cv_valve >= cv_req:
+                break
+            open_percent += 1
+        
+        # Second pass: recalculate with Fl at actual operating point
+        fl_at_op = valve.get_fl_at_opening(open_percent)
+        cv_req, details = cv_liquid(
+            flow=scenario["flow"],
+            p1=scenario["p1"],
+            p2=scenario["p2"],
+            sg=scenario["sg"],
+            fl_at_op=fl_at_op,
+            pv=scenario["pv"],
+            pc=scenario["pc"],
+            visc_cst=scenario["visc"],
+            d_m=valve.diameter * 0.0254,
+            valve=valve,
+            fp=fp
+        )
+        
+        # Recalculate operating point with updated cv_req
+        open_percent = 10
+        while open_percent <= 100:
+            cv_valve = valve.get_cv_at_opening(open_percent)
+            if cv_valve >= cv_req:
+                break
+            open_percent += 1
+            
         if scenario["pc"] > 0:
             choked, sigma, km, cav_msg = check_cavitation(
-                scenario["p1"], scenario["p2"], scenario["pv"], valve.fl, scenario["pc"]
+                scenario["p1"], scenario["p2"], scenario["pv"], fl_at_op, scenario["pc"]
             )
             details['is_choked'] = choked
             details['cavitation_severity'] = cav_msg
@@ -1455,6 +1456,7 @@ def evaluate_valve_for_scenario(valve, scenario):
             if "z_func" in fluid_data:
                 scenario["z"] = fluid_data["z_func"](scenario["temp"], scenario["p1"])
         
+        # First pass: calculate with Xt at 100% opening
         cv_req, details = cv_gas(
             flow=scenario["flow"],
             p1=scenario["p1"],
@@ -1462,11 +1464,49 @@ def evaluate_valve_for_scenario(valve, scenario):
             sg=scenario["sg"],
             t=scenario["temp"],
             k=scenario["k"],
-            xt=xt,
+            xt_at_op=xt,
             z=scenario["z"],
             fp=fp
         )
-        details['cavitation_severity'] = "N/A"
+        
+        # First pass: calculate operating point
+        open_percent = 10
+        while open_percent <= 100:
+            cv_valve = valve.get_cv_at_opening(open_percent)
+            if cv_valve >= cv_req:
+                break
+            open_percent += 1
+        
+        # Second pass: recalculate with Xt at actual operating point
+        xt_at_op = valve.get_xt_at_opening(open_percent)
+        if abs(pipe_d - valve_d) > 0.01:
+            xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
+        
+        cv_req, details = cv_gas(
+            flow=scenario["flow"],
+            p1=scenario["p1"],
+            p2=scenario["p2"],
+            sg=scenario["sg"],
+            t=scenario["temp"],
+            k=scenario["k"],
+            xt_at_op=xt_at_op,
+            z=scenario["z"],
+            fp=fp
+        )
+        
+        # Recalculate operating point with updated cv_req
+        open_percent = 10
+        while open_percent <= 100:
+            cv_valve = valve.get_cv_at_opening(open_percent)
+            if cv_valve >= cv_req:
+                break
+            open_percent += 1
+            
+        # Set cavitation severity based on choked flow
+        if details.get('is_choked', False):
+            details['cavitation_severity'] = "Choked flow detected"
+        else:
+            details['cavitation_severity'] = "No choked flow"
         
     else:
         if scenario.get('fluid_library') in FLUID_LIBRARY:
@@ -1474,16 +1514,53 @@ def evaluate_valve_for_scenario(valve, scenario):
             scenario["rho"] = fluid_data["rho_func"](scenario["temp"], scenario["p1"])
             scenario["k"] = fluid_data["k_func"](scenario["temp"], scenario["p1"])
         
+        # First pass: calculate with Xt at 100% opening
         cv_req, details = cv_steam(
             flow=scenario["flow"],
             p1=scenario["p1"],
             p2=scenario["p2"],
             rho=scenario["rho"],
             k=scenario["k"],
-            xt=xt,
+            xt_at_op=xt,
             fp=fp
         )
-        details['cavitation_severity'] = "N/A"
+        
+        # First pass: calculate operating point
+        open_percent = 10
+        while open_percent <= 100:
+            cv_valve = valve.get_cv_at_opening(open_percent)
+            if cv_valve >= cv_req:
+                break
+            open_percent += 1
+        
+        # Second pass: recalculate with Xt at actual operating point
+        xt_at_op = valve.get_xt_at_opening(open_percent)
+        if abs(pipe_d - valve_d) > 0.01:
+            xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
+        
+        cv_req, details = cv_steam(
+            flow=scenario["flow"],
+            p1=scenario["p1"],
+            p2=scenario["p2"],
+            rho=scenario["rho"],
+            k=scenario["k"],
+            xt_at_op=xt_at_op,
+            fp=fp
+        )
+        
+        # Recalculate operating point with updated cv_req
+        open_percent = 10
+        while open_percent <= 100:
+            cv_valve = valve.get_cv_at_opening(open_percent)
+            if cv_valve >= cv_req:
+                break
+            open_percent += 1
+            
+        # Set cavitation severity based on choked flow
+        if details.get('is_choked', False):
+            details['cavitation_severity'] = "Choked flow detected"
+        else:
+            details['cavitation_severity'] = "No choked flow"
     
     if 'error' in details:
         return {
@@ -1498,27 +1575,26 @@ def evaluate_valve_for_scenario(valve, scenario):
             "velocity": velocity
         }
     
-    open_percent = 10
-    while open_percent <= 100:
-        cv_valve = valve.get_cv_at_opening(open_percent)
-        if cv_valve >= cv_req:
-            break
-        open_percent += 1
-    
     warn = ""
-    if open_percent < 20:
+    # Check for insufficient capacity
+    if open_percent >= 100 and cv_valve < cv_req:
+        warn = "Insufficient Capacity – Valve is undersized"
+        status = "red"
+    elif open_percent < 20:
         warn = "Low opening (<20%)"
+        status = "yellow"
     elif open_percent > 80:
         warn = "High opening (>80%)"
+        status = "yellow"
+    else:
+        status = "green"
     
-    status = "green"
+    # Override status based on flow conditions
     if details.get('is_choked', False):
         status = "red"
     elif "Severe" in details.get('cavitation_severity', ""):
         status = "orange"
     elif "Moderate" in details.get('cavitation_severity', ""):
-        status = "yellow"
-    elif open_percent < 20 or open_percent > 80:
         status = "yellow"
     
     return {
@@ -1598,7 +1674,7 @@ def get_valve_display_name(valve):
     return f"{valve.size}\" E{valve.valve_type}{rating_code}"
 
 def create_valve_dropdown():
-    valves = sorted(VALVE_DATABASE, key=lambda v: (v.size, v.rating_class, v.valve_type))
+    valves = sorted(st.session_state.valve_database, key=lambda v: (v.size, v.rating_class, v.valve_type))
     valve_options = {get_valve_display_name(v): v for v in valves}
     return valve_options
 
@@ -1952,6 +2028,8 @@ def valve_3d_viewer(valve_name, model_url):
     components.html(html_code, height=1000)
 
 def main():
+    # Global değişkeni kullanacağımızı belirtiyoruz
+    global VALVE_DATABASE
     st.set_page_config(
         page_title="Control Valve Sizing",
         page_icon="🔧",
@@ -2007,6 +2085,10 @@ def main():
         .danger-card {
             background-color: #f8d7da;
             border-left: 5px solid #dc3545;
+        }
+        .insufficient-card {
+            background-color: #f8d7da;
+            border-left: 5px solid #8b0000; /* Dark red for insufficient capacity */
         }
         .cavitation-card {
             background-color: #ffe8cc;
@@ -2077,9 +2159,14 @@ def main():
         .status-red {
             background-color: #f8d7da;
         }
+        .status-insufficient {
+            background-color: #f8d7da;
+            border: 2px solid #8b0000; /* Dark red border for insufficient capacity */
+        }
         </style>
     """, unsafe_allow_html=True)
-    
+    if 'valve_database' not in st.session_state:
+        st.session_state.valve_database =   VALVE_DATABASE
     if 'results' not in st.session_state:
         st.session_state.results = None
     if 'valve' not in st.session_state:
@@ -2139,8 +2226,8 @@ def main():
         st.markdown(f"**Size:** {selected_valve.size}\"")
         st.markdown(f"**Type:** {'Globe' if selected_valve.valve_type == 3 else 'Axial'}")
         st.markdown(f"**Rating Class:** {selected_valve.rating_class}")
-        st.markdown(f"**Fl (Liquid Recovery):** {selected_valve.fl:.3f}")
-        st.markdown(f"**Xt (Pressure Drop Ratio):** {selected_valve.xt:.3f}")
+        st.markdown(f"**Fl (Liquid Recovery):** {selected_valve.get_fl_at_opening(100):.3f}")
+        st.markdown(f"**Xt (Pressure Drop Ratio):** {selected_valve.get_xt_at_opening(100):.3f}")
         st.markdown(f"**Fd (Style Modifier):** {selected_valve.fd:.2f}")
         st.markdown(f"**Internal Diameter:** {selected_valve.diameter:.2f} in")
         
@@ -2148,6 +2235,16 @@ def main():
         cv_data = {"Opening %": list(selected_valve.cv_table.keys()), "Cv": list(selected_valve.cv_table.values())}
         cv_df = pd.DataFrame(cv_data)
         st.dataframe(cv_df, hide_index=True, height=300)
+        
+        st.subheader("Fl Characteristics")
+        fl_data = {"Opening %": list(selected_valve.fl_table.keys()), "Fl": list(selected_valve.fl_table.values())}
+        fl_df = pd.DataFrame(fl_data)
+        st.dataframe(fl_df, hide_index=True, height=300)
+        
+        st.subheader("Xt Characteristics")
+        xt_data = {"Opening %": list(selected_valve.xt_table.keys()), "Xt": list(selected_valve.xt_table.values())}
+        xt_df = pd.DataFrame(xt_data)
+        st.dataframe(xt_df, hide_index=True, height=300)
     
     if view_3d_btn:
         st.session_state.show_3d_viewer = True
@@ -2155,6 +2252,123 @@ def main():
     if show_simulation_btn:
         st.session_state.show_simulation = True
         st.session_state.show_3d_viewer = False
+    
+    with st.sidebar:
+        st.header("Valve Management")
+        
+        if st.button("Reload Valve Database"):
+            VALVE_DATABASE = load_valves_from_excel()
+            st.session_state.valve_database = VALVE_DATABASE
+            st.success("Valve database reloaded!")
+        
+        with st.expander("Add New Valve"):
+            size = st.number_input("Size (inch)", min_value=0.5, step=0.5)
+            rating_class = st.selectbox("Rating Class", [150, 300, 600, 900, 1500])
+            valve_type = st.selectbox("Valve Type", [3, 4], format_func=lambda x: "Globe" if x == 3 else "Axial")
+            fd = st.number_input("Fd", value=1.0)
+            diameter = st.number_input("Diameter (inch)", min_value=0.1)
+            
+            st.subheader("Valve Characteristics Tables")
+            
+            # Default values for each characteristic
+            default_openings = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+            default_cv = [0.0, 3.28, 7.39, 12.0, 14.2, 14.9, 15.3, 15.7, 16.0, 16.4, 16.8]
+            default_fl = [0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68]
+            default_xt = [0.581, 0.605, 0.617, 0.644, 0.764, 0.790, 0.809, 0.813, 0.795, 0.768, 0.74]
+            
+            # Create editable dataframes
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**Cv Table**")
+                cv_data = pd.DataFrame({
+                    "Opening (%)": default_openings,
+                    "Cv": default_cv
+                })
+                cv_edited = st.data_editor(
+                    cv_data,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"cv_editor_{size}_{rating_class}_{valve_type}"
+                )
+            
+            with col2:
+                st.markdown("**Fl Table**")
+                fl_data = pd.DataFrame({
+                    "Opening (%)": default_openings,
+                    "Fl": default_fl
+                })
+                fl_edited = st.data_editor(
+                    fl_data,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"fl_editor_{size}_{rating_class}_{valve_type}"
+                )
+            
+            with col3:
+                st.markdown("**Xt Table**")
+                xt_data = pd.DataFrame({
+                    "Opening (%)": default_openings,
+                    "Xt": default_xt
+                })
+                xt_edited = st.data_editor(
+                    xt_data,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"xt_editor_{size}_{rating_class}_{valve_type}"
+                )
+            
+            if st.button("Add Valve to Database"):
+                try:
+                    # Convert edited data to dictionaries
+                    cv_dict = {}
+                    for _, row in cv_edited.iterrows():
+                        opening = int(row['Opening (%)'])
+                        cv = float(row['Cv'])
+                        cv_dict[opening] = cv
+                    
+                    fl_dict = {}
+                    for _, row in fl_edited.iterrows():
+                        opening = int(row['Opening (%)'])
+                        fl = float(row['Fl'])
+                        fl_dict[opening] = fl
+                    
+                    xt_dict = {}
+                    for _, row in xt_edited.iterrows():
+                        opening = int(row['Opening (%)'])
+                        xt = float(row['Xt'])
+                        xt_dict[opening] = xt
+                    
+                    new_valve = Valve(
+                        size_inch=size,
+                        rating_class=rating_class,
+                        cv_table=cv_dict,
+                        fl_table=fl_dict,
+                        xt_table=xt_dict,
+                        fd=fd,
+                        d_inch=diameter,
+                        valve_type=valve_type
+                    )
+                    add_valve_to_database(new_valve)
+                    VALVE_DATABASE = load_valves_from_excel()
+                    st.session_state.valve_database = VALVE_DATABASE
+                    st.success("Valve added to database!")
+                except Exception as e:
+                    st.error(f"Error adding valve: {str(e)}")
+        
+        with st.expander("Delete Valve"):
+            valve_options = {get_valve_display_name(v): v for v in VALVE_DATABASE}
+            valve_to_delete = st.selectbox("Select Valve to Delete", list(valve_options.keys()))
+            
+            if st.button("Delete Valve"):
+                valve = valve_options[valve_to_delete]
+                delete_valve_from_database(valve.size, valve.rating_class, valve.valve_type)
+                VALVE_DATABASE = load_valves_from_excel()
+                st.session_state.valve_database = VALVE_DATABASE
+                st.success("Valve deleted from database!")
     
     tab1, tab2, tab3, tab_results = st.tabs(["Scenario 1", "Scenario 2", "Scenario 3", "Results"])
     
@@ -2212,7 +2426,9 @@ def main():
                     
                     # Determine status class
                     status_class = ""
-                    if result["status"] == "green":
+                    if "Insufficient" in result["warning"]:
+                        status_class = "insufficient-card"
+                    elif result["status"] == "green":
                         status_class = "success-card"
                     elif result["status"] == "yellow":
                         status_class = "warning-card"
@@ -2249,6 +2465,7 @@ def main():
                     - **Yellow status**: Acceptable but suboptimal (moderate cavitation or bad opening)
                     - **Orange status**: Severe cavitation risk
                     - **Red status**: Choked flow (unacceptable)
+                    - **Dark red**: Insufficient capacity (valve undersized)
                     """)
                     st.markdown(f"""
                     **Selection criteria**:
@@ -2267,14 +2484,16 @@ def main():
                 [r["theoretical_cv"] for r in selected_valve_results],
                 [s["name"] for s in scenarios]
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="main_cv_curve")
             
             st.subheader("Selected Valve Performance")
             for i, scenario in enumerate(scenarios):
                 result = selected_valve_results[i]
                 actual_cv = selected_valve.get_cv_at_opening(result["op_point"])
-                status = "success-card" if result["status"] == "green" else "warning-card"
-                if result["status"] == "yellow":
+                status = "success-card"
+                if "Insufficient" in result["warning"]:
+                    status = "insufficient-card"
+                elif result["status"] == "yellow":
                     status = "warning-card"
                 elif result["status"] == "orange":
                     status = "cavitation-card"
@@ -2305,32 +2524,109 @@ def main():
                         st.subheader("Calculation Parameters")
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.markdown(f"**Fl (Liquid Recovery):** {selected_valve.fl:.3f}")
+                            # Fixed Fl display
+                            fl_at_op = result['details'].get('fl_at_op', 'N/A')
+                            if isinstance(fl_at_op, (int, float)):
+                                st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op:.3f}")
+                            else:
+                                st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op}")
+                                
                             st.markdown(f"**Fd (Valve Style Modifier):** {selected_valve.fd:.2f}")
-                            st.markdown(f"**Fp (Piping Factor):** {result['details'].get('fp', 1.0):.4f}")
+                            
+                            # Fixed Fp display
+                            fp_val = result['details'].get('fp', 1.0)
+                            if isinstance(fp_val, (int, float)):
+                                st.markdown(f"**Fp (Piping Factor):** {fp_val:.4f}")
+                            else:
+                                st.markdown(f"**Fp (Piping Factor):** {fp_val}")
                             
                         with col2:
                             if scenario["fluid_type"] == "liquid":
-                                st.markdown(f"**FF (Critical Pressure Ratio):** {result['details'].get('ff', 0.96):.4f}")
-                                st.markdown(f"**Fr (Viscosity Correction):** {result['details'].get('fr', 1.0):.4f}")
-                                st.markdown(f"**Reynolds Number:** {result['details'].get('reynolds', 0):.0f}")
+                                # Fixed FF display
+                                ff_val = result['details'].get('ff', 0.96)
+                                if isinstance(ff_val, (int, float)):
+                                    st.markdown(f"**FF (Critical Pressure Ratio):** {ff_val:.4f}")
+                                else:
+                                    st.markdown(f"**FF (Critical Pressure Ratio):** {ff_val}")
+                                    
+                                # Fixed Fr display
+                                fr_val = result['details'].get('fr', 1.0)
+                                if isinstance(fr_val, (int, float)):
+                                    st.markdown(f"**Fr (Viscosity Correction):** {fr_val:.4f}")
+                                else:
+                                    st.markdown(f"**Fr (Viscosity Correction):** {fr_val}")
+                                
+                                # Fixed Reynolds display
+                                reynolds_val = result['details'].get('reynolds', 0)
+                                if isinstance(reynolds_val, (int, float)):
+                                    st.markdown(f"**Reynolds Number:** {reynolds_val:.0f}")
+                                else:
+                                    st.markdown(f"**Reynolds Number:** {reynolds_val}")
                         
-                        st.markdown(f"**Max Pressure Drop (ΔPmax):** {result['details'].get('dp_max', 0):.2f} bar")
-                        st.markdown(f"**Average Velocity in Valve:** {result.get('velocity', 0):.2f} m/s")
+                        # Fixed ΔPmax display
+                        dp_max_val = result['details'].get('dp_max', 0)
+                        if isinstance(dp_max_val, (int, float)):
+                            st.markdown(f"**Max Pressure Drop (ΔPmax):** {dp_max_val:.2f} bar")
+                        else:
+                            st.markdown(f"**Max Pressure Drop (ΔPmax):** {dp_max_val} bar")
+                            
+                        # Fixed velocity display
+                        velocity_val = result.get('velocity', 0)
+                        if isinstance(velocity_val, (int, float)):
+                            st.markdown(f"**Average Velocity in Valve:** {velocity_val:.2f} m/s")
+                        else:
+                            st.markdown(f"**Average Velocity in Valve:** {velocity_val} m/s")
                         
                         if scenario["fluid_type"] == "liquid":
                             if result["details"].get('cavitation_severity'):
                                 st.subheader("Cavitation Analysis")
                                 st.markdown(f"**Status:** {result['details']['cavitation_severity']}")
-                                st.markdown(f"**Sigma (σ):** {result['details'].get('sigma', 0):.2f}")
-                                st.markdown(f"**Km (Valve Recovery Coefficient):** {result['details'].get('km', 0):.2f}")
+                                
+                                # Fixed sigma display
+                                sigma_val = result['details'].get('sigma', 0)
+                                if isinstance(sigma_val, (int, float)):
+                                    st.markdown(f"**Sigma (σ):** {sigma_val:.2f}")
+                                else:
+                                    st.markdown(f"**Sigma (σ):** {sigma_val}")
+                                
+                                # Fixed Km display
+                                km_val = result['details'].get('km', 0)
+                                if isinstance(km_val, (int, float)):
+                                    st.markdown(f"**Km (Valve Recovery Coefficient):** {km_val:.2f}")
+                                else:
+                                    st.markdown(f"**Km (Valve Recovery Coefficient):** {km_val}")
                         
                         if scenario["fluid_type"] in ["gas", "steam"]:
-                            st.subheader("Gas/Steam Parameters")
-                            st.markdown(f"**Pressure Drop Ratio (x):** {result['details'].get('x_actual', 0):.4f}")
-                            st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {result['details'].get('x_crit', 0):.4f}")
-                            st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {result['details'].get('xt', 0):.4f}")
-                            st.markdown(f"**Choked Pressure Drop:** {result['details'].get('x_crit', 0) * scenario['p1']:.2f} bar")
+                            st.subheader("Choked Flow Analysis")
+                            st.markdown(f"**Status:** {result['cavitation_info']}")
+                            
+                            # Fixed x_actual display
+                            x_actual_val = result['details'].get('x_actual', 0)
+                            if isinstance(x_actual_val, (int, float)):
+                                st.markdown(f"**Pressure Drop Ratio (x):** {x_actual_val:.4f}")
+                            else:
+                                st.markdown(f"**Pressure Drop Ratio (x):** {x_actual_val}")
+                            
+                            # Fixed x_crit display
+                            x_crit_val = result['details'].get('x_crit', 0)
+                            if isinstance(x_crit_val, (int, float)):
+                                st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {x_crit_val:.4f}")
+                            else:
+                                st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {x_crit_val}")
+                            
+                            # Fixed xt_at_op display
+                            xt_at_op_val = result['details'].get('xt_at_op', 0)
+                            if isinstance(xt_at_op_val, (int, float)):
+                                st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {xt_at_op_val:.4f}")
+                            else:
+                                st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {xt_at_op_val}")
+                            
+                            # Fixed choked pressure drop display
+                            if isinstance(x_crit_val, (int, float)) and isinstance(scenario['p1'], (int, float)):
+                                choked_dp = x_crit_val * scenario['p1']
+                                st.markdown(f"**Choked Pressure Drop:** {choked_dp:.2f} bar")
+                            else:
+                                st.markdown("**Choked Pressure Drop:** N/A")
                         
                         st.subheader("Flow Rate vs Pressure Drop")
                         flow_fig = generate_flow_vs_dp_graph(
@@ -2340,7 +2636,7 @@ def main():
                             result["details"],
                             result["req_cv"]
                         )
-                        st.plotly_chart(flow_fig, use_container_width=True)
+                        st.plotly_chart(flow_fig, use_container_width=True, key=f"flow_dp_{i}")
             
             st.subheader("All Valves Evaluation")
             st.markdown("""
@@ -2349,6 +2645,7 @@ def main():
             - <span style="background-color:#fff3cd; padding:2px 5px;">Yellow</span>: Warning (moderate issue)
             - <span style="background-color:#ffe8cc; padding:2px 5px;">Orange</span>: Severe cavitation
             - <span style="background-color:#f8d7da; padding:2px 5px;">Red</span>: Choked flow (unacceptable)
+            - <span style="background-color:#f8d7da; border:2px solid #8b0000; padding:2px 5px;">Dark Red</span>: Insufficient capacity
             """, unsafe_allow_html=True)
             all_valves_table_html = """
             <table class="valve-table">
@@ -2373,7 +2670,9 @@ def main():
                 all_valves_table_html += f'<tr><td>{valve_result["display_name"]}</td>'
                 for result in valve_result["results"]:
                     status_class = ""
-                    if result["status"] == "green":
+                    if "Insufficient" in result["warning"]:
+                        status_class = "status-insufficient"
+                    elif result["status"] == "green":
                         status_class = "status-green"
                     elif result["status"] == "yellow":
                         status_class = "status-yellow"
@@ -2420,71 +2719,127 @@ def main():
                     st.markdown(f"- Operating Point: {selected_valve_results[i]['op_point']:.1f}% open")
                     st.markdown(f"- Actual Cv at Operating Point: {selected_valve.get_cv_at_opening(selected_valve_results[i]['op_point']):.1f}")
                     st.markdown(f"- Margin: {selected_valve_results[i]['margin']:.1f}%")
-                    status_msg = "Optimal" if selected_valve_results[i]["status"] == "green" else "Warning" if selected_valve_results[i]["status"] == "yellow" else "Severe cavitation" if selected_valve_results[i]["status"] == "orange" else "Choked flow"
+                    status_msg = "Optimal" if selected_valve_results[i]['status'] == "green" else "Warning" if selected_valve_results[i]['status'] == "yellow" else "Severe Cavitation" if selected_valve_results[i]['status'] == "orange" else "Critical (Choked)" if selected_valve_results[i]['status'] == "red" else "Insufficient Capacity"
                     st.markdown(f"- Status: {status_msg}")
-                    if selected_valve_results[i]["warning"] or selected_valve_results[i]["cavitation_info"] != "N/A":
-                        st.warning(f"⚠️ {selected_valve_results[i]['warning']}, {selected_valve_results[i]['cavitation_info']}")
-        else:
-            st.info("Click 'Calculate Opening' in the sidebar to see results")
-        
-        if st.session_state.show_3d_viewer:
-            st.subheader("3D Valve Model")
-            model_url = VALVE_MODELS.get(selected_valve_name, "https://raw.githubusercontent.com/gurkan-maker/demo2/main/obje8e43.glb")
-            valve_3d_viewer(selected_valve_name, model_url)
-        if st.session_state.show_simulation:
-            st.subheader("Simulation Results")
-            image_url = get_simulation_image(selected_valve_name)
-            st.image(image_url, caption=f"Simulation Results for {selected_valve_name}", use_column_width=True)
+                    if selected_valve_results[i]['warning']:
+                        st.markdown(f"- Warning: {selected_valve_results[i]['warning']}")
+                    if selected_valve_results[i]['cavitation_info']:
+                        st.markdown(f"- Flow Status: {selected_valve_results[i]['cavitation_info']}")
+                    
+                    # Add detailed calculation parameters
+                    st.markdown("**Calculation Parameters**")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        fl_at_op = result['details'].get('fl_at_op', 'N/A')
+                        if isinstance(fl_at_op, (int, float)):
+                            st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op:.3f}")
+                        else:
+                            st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op}")
+                        st.markdown(f"**Fd (Valve Style Modifier):** {selected_valve.fd:.2f}")
+                        st.markdown(f"**Fp (Piping Factor):** {result['details'].get('fp', 1.0):.4f}")
+                        
+                    with col2:
+                        if scenario["fluid_type"] == "liquid":
+                            st.markdown(f"**FF (Critical Pressure Ratio):** {result['details'].get('ff', 0.96):.4f}")
+                            st.markdown(f"**Fr (Viscosity Correction):** {result['details'].get('fr', 1.0):.4f}")
+                            st.markdown(f"**Reynolds Number:** {result['details'].get('reynolds', 0):.0f}")
+                    
+                    st.markdown(f"**Max Pressure Drop (ΔPmax):** {result['details'].get('dp_max', 0):.2f} bar")
+                    st.markdown(f"**Average Velocity in Valve:** {result.get('velocity', 0):.2f} m/s")
+                    
+                    if scenario["fluid_type"] == "liquid":
+                        if result["details"].get('cavitation_severity'):
+                            st.subheader("Cavitation Analysis")
+                            st.markdown(f"**Status:** {result['details']['cavitation_severity']}")
+                            st.markdown(f"**Sigma (σ):** {result['details'].get('sigma', 0):.2f}")
+                            st.markdown(f"**Km (Valve Recovery Coefficient):** {result['details'].get('km', 0):.2f}")
+                    
+                    if scenario["fluid_type"] in ["gas", "steam"]:
+                        st.subheader("Choked Flow Analysis")
+                        st.markdown(f"**Status:** {result['cavitation_info']}")
+                        st.markdown(f"**Pressure Drop Ratio (x):** {result['details'].get('x_actual', 0):.4f}")
+                        st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {result['details'].get('x_crit', 0):.4f}")
+                        st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {result['details'].get('xt_at_op', 0):.4f}")
+                        st.markdown(f"**Choked Pressure Drop:** {result['details'].get('x_crit', 0) * scenario['p1']:.2f} bar")
+                    
+                    st.subheader("Flow Rate vs Pressure Drop")
+                    flow_fig = generate_flow_vs_dp_graph(
+                        scenario,
+                        selected_valve,
+                        result["op_point"],
+                        result["details"],
+                        result["req_cv"]
+                    )
+                    st.plotly_chart(flow_fig, use_container_width=True, key=f"detailed_flow_dp_{i}")
     
+    # Handle export button
     if export_btn:
-        if not st.session_state.results:
-            st.error("Please calculate results before exporting.")
-            st.stop()
-        try:
-            # Generate both plots for PDF
-            cv_plot_bytes = plot_cv_curve_matplotlib(
-                st.session_state.results["selected_valve"], 
-                [r["op_point"] for r in st.session_state.results["selected_valve_results"]],
-                [r["req_cv"] for r in st.session_state.results["selected_valve_results"]],
-                [r["theoretical_cv"] for r in st.session_state.results["selected_valve_results"]],
-                [s["name"] for s in st.session_state.scenarios]
-            )
-            
-            # Generate flow vs pressure drop plot for first scenario
-            flow_dp_plot_bytes = None
-            if st.session_state.scenarios:
-                scenario = st.session_state.scenarios[0]
-                result = st.session_state.results["selected_valve_results"][0]
-                flow_dp_plot_bytes = plot_flow_vs_dp_matplotlib(
-                    scenario,
-                    st.session_state.results["selected_valve"],
-                    result["op_point"],
-                    result["details"],
-                    result["req_cv"]
+        if st.session_state.results is None:
+            st.error("Please run the calculation first.")
+        else:
+            with st.spinner("Generating PDF report..."):
+                # Prepare data for PDF
+                scenarios = st.session_state.scenarios
+                valve = st.session_state.results["selected_valve"]
+                op_points = [r["op_point"] for r in st.session_state.results["selected_valve_results"]]
+                req_cvs = [r["req_cv"] for r in st.session_state.results["selected_valve_results"]]
+                warnings = [r["warning"] for r in st.session_state.results["selected_valve_results"]]
+                cavitation_info = [r["cavitation_info"] for r in st.session_state.results["selected_valve_results"]]
+                theoretical_cvs = [r["theoretical_cv"] for r in st.session_state.results["selected_valve_results"]]
+                
+                # Generate the Cv curve plot for PDF
+                plot_bytes = plot_cv_curve_matplotlib(valve, op_points, req_cvs, theoretical_cvs, [s["name"] for s in scenarios])
+                
+                # Generate one Flow vs DP plot (for the first scenario) for PDF
+                flow_dp_plot_bytes = None
+                if scenarios:
+                    flow_dp_plot_bytes = plot_flow_vs_dp_matplotlib(
+                        scenarios[0],
+                        valve,
+                        op_points[0],
+                        st.session_state.results["selected_valve_results"][0]["details"],
+                        req_cvs[0]
+                    )
+                
+                # Generate PDF
+                logo_bytes = st.session_state.logo_bytes
+                logo_type = st.session_state.logo_type
+                pdf_bytes_io = generate_pdf_report(
+                    scenarios, valve, op_points, req_cvs, warnings, cavitation_info, 
+                    plot_bytes, flow_dp_plot_bytes, logo_bytes, logo_type
                 )
-            
-            pdf_bytes = generate_pdf_report(
-                st.session_state.scenarios,
-                st.session_state.results["selected_valve"],
-                [r["op_point"] for r in st.session_state.results["selected_valve_results"]],
-                [r["req_cv"] for r in st.session_state.results["selected_valve_results"]],
-                [r["warning"] for r in st.session_state.results["selected_valve_results"]],
-                [r["cavitation_info"] for r in st.session_state.results["selected_valve_results"]],
-                cv_plot_bytes,
-                flow_dp_plot_bytes,
-                st.session_state.logo_bytes,
-                st.session_state.logo_type
-            )
-            st.sidebar.download_button(
-                label="Download PDF Report",
-                data=pdf_bytes,
-                file_name=f"valve_sizing_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                mime="application/pdf"
-            )
-            st.sidebar.success("PDF report generated successfully!")
-        except Exception as e:
-            st.sidebar.error(f"PDF generation failed: {str(e)}")
-            st.sidebar.text(traceback.format_exc())
+                
+                # Offer download
+                st.success("PDF report generated!")
+                st.download_button(
+                    label="Download PDF Report",
+                    data=pdf_bytes_io,
+                    file_name=f"Valve_Sizing_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf"
+                )
+    
+    # Handle 3D viewer and simulation display
+    if st.session_state.show_3d_viewer:
+        valve_name = get_valve_display_name(selected_valve)
+        model_url = VALVE_MODELS.get(valve_name, None)
+        if model_url:
+            st.subheader(f"3D Model: {valve_name}")
+            valve_3d_viewer(valve_name, model_url)
+        else:
+            st.warning(f"3D model not available for {valve_name}")
+        # Add a button to close the viewer
+        if st.button("Close 3D Viewer"):
+            st.session_state.show_3d_viewer = False
+    
+    if st.session_state.show_simulation:
+        valve_name = get_valve_display_name(selected_valve)
+        sim_image_url = get_simulation_image(valve_name)
+        st.subheader(f"CFD Simulation Results: {valve_name}")
+        st.image(sim_image_url, use_container_width=True)
+        # Add a button to close the simulation
+        if st.button("Close Simulation"):
+            st.session_state.show_simulation = False
 
+# Run the main function
 if __name__ == "__main__":
     main()
