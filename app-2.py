@@ -1,3 +1,5 @@
+from valve_database import load_valves_from_excel, add_valve_to_database, delete_valve_from_database, delete_valve_from_database
+from valve import Valve
 from scipy.interpolate import CubicSpline
 import streamlit as st
 import streamlit.components.v1 as components
@@ -254,134 +256,10 @@ def calculate_ff(pv: float, pc: float) -> float:
 # ========================
 # VALVE DATABASE
 # ========================
-class Valve:
-    def __init__(self, size_inch: str, rating_class: str, cv_table: dict, 
-                 fl_table: dict, xt_table: dict, fd: float, d_inch: float,
-                 valve_type: int = 3):
-        if 0 not in cv_table:
-            cv_table[0] = 0.0
-        self.size = size_inch
-        self.rating_class = rating_class
-        self.cv_table = cv_table
-        self.fl_table = fl_table
-        self.xt_table = xt_table
-        self.fd = fd
-        self.diameter = d_inch
-        self.valve_type = valve_type
-        
-    def get_cv_at_opening(self, open_percent: float) -> float:
-        open_percent = max(0, min(100, open_percent))
-        if open_percent == 0:
-            return 0.0
-        keys = sorted(self.cv_table.keys())
-        for i in range(len(keys)-1):
-            if keys[i] <= open_percent <= keys[i+1]:
-                x0, x1 = keys[i], keys[i+1]
-                y0, y1 = self.cv_table[x0], self.cv_table[x1]
-                return y0 + (y1 - y0) * (open_percent - x0) / (x1 - x0)
-        if open_percent <= keys[0]:
-            return self.cv_table[keys[0]]
-        return self.cv_table[keys[-1]]
-    
-    def get_fl_at_opening(self, open_percent: float) -> float:
-        open_percent = max(0, min(100, open_percent))
-        if open_percent == 0:
-            return 0.0
-        keys = sorted(self.fl_table.keys())
-        for i in range(len(keys)-1):
-            if keys[i] <= open_percent <= keys[i+1]:
-                x0, x1 = keys[i], keys[i+1]
-                y0, y1 = self.fl_table[x0], self.fl_table[x1]
-                return y0 + (y1 - y0) * (open_percent - x0) / (x1 - x0)
-        if open_percent <= keys[0]:
-            return self.fl_table[keys[0]]
-        return self.fl_table[keys[-1]]
-    
-    def get_xt_at_opening(self, open_percent: float) -> float:
-        open_percent = max(10, min(100, open_percent))
-        keys = sorted(self.xt_table.keys())
-        for i in range(len(keys)-1):
-            if keys[i] <= open_percent <= keys[i+1]:
-                x0, x1 = keys[i], keys[i+1]
-                y0, y1 = self.xt_table[x0], self.xt_table[x1]
-                return y0 + (y1 - y0) * (open_percent - x0) / (x1 - x0)
-        if open_percent <= keys[0]:
-            return self.xt_table[keys[0]]
-        return self.xt_table[keys[-1]]
-
-# Existing valves converted to new format + new valves from catalogs
-VALVE_DATABASE = [
-   
-    # ======================
-    # New Valves from Catalog 12 (Whisper Trim I)
-    # ======================
-    # Valve 1 
-    Valve(1, 600,
-          {0:0.0, 10:3.28, 20:7.39, 30:12.0, 40:14.2, 50:14.9, 60:15.3, 70:15.7, 80:16.0, 90:16.4, 100:16.8},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.581, 20:0.605, 30:0.617, 40:0.644, 50:0.764, 60:0.790, 70:0.809, 80:0.813, 90:0.795, 100:0.768},
-          1, 1.0, 3),
-
-     
-    # Valve 2
-    Valve(2, 600,
-          {0:0.0, 10:19.2, 20:34.6, 30:42.2, 40:45.5, 50:47.0, 60:47.1, 70:47.2, 80:47.2, 90:47.2, 100:48.0},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.467, 20:0.318, 30:0.387, 40:0.526, 50:0.689, 60:0.843, 70:0.899, 80:0.940, 90:0.940, 100:0.938},
-          1, 2.0, 3),
-    
-    # Valve 4 
-    Valve(4, 600,
-          {0:0.0, 10:76.6, 20:117, 30:135, 40:137, 50:137, 60:141, 70:149, 80:157, 90:157, 100:169},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.385, 20:0.352, 30:0.467, 40:0.682, 50:0.887, 60:0.977, 70:0.958, 80:0.921, 90:0.921, 100:0.811},
-          1, 4.0, 3),
-    
-    # Valve 8 
-    Valve(8, 600,
-          {0:0.0, 10:226, 20:337, 30:436, 40:502, 50:581, 60:641, 70:655, 80:659, 90:659, 100:681},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.490, 20:0.470, 30:0.427, 40:0.452, 50:0.468, 60:0.521, 70:0.624, 80:0.703, 90:0.703, 100:0.701},
-          1, 8.0, 3),
-    
-    # ======================
-    # New Valves from Catalog 12 (Large ED/EWD)
-    # ======================
-    # Valve 12
-    Valve(12, 600,
-          {0:0.0, 10:50, 20:91, 30:141, 40:222, 50:352, 60:540, 70:797, 80:1127, 90:1361, 100:1488},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.747, 20:0.731, 30:0.706, 40:0.650, 50:0.584, 60:0.575, 70:0.610, 80:0.679, 90:0.797, 100:0.804},
-          1, 12.0, 3),
-    
-    # Valve 16
-    Valve(16, 600,
-          {0:0.0, 10:22, 20:54, 30:86, 40:136, 50:213, 60:321, 70:477, 80:695, 90:1010, 100:1414},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 16.0, 3),
-    
-    # Valve 20 
-    Valve(20, 600,
-          {0:0.0, 10:90, 20:214, 30:408, 40:733, 50:1276, 60:2122, 70:2954, 80:3661, 90:4270, 100:4820},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 20.0, 3),
-    
-    # Valve 30
-    Valve(30, 600,
-          {0:0.0, 10:126, 20:305, 30:520, 40:876, 50:1343, 60:2200, 70:3599, 80:5150, 90:6563, 100:7690},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.80, 20:0.80, 30:0.80, 40:0.80, 50:0.80, 60:0.80, 70:0.80, 80:0.80, 90:0.80, 100:0.80},
-          1, 30, 3),
-    # Valve 8
-    Valve(8, 600,
-          {0:0.0, 10:10, 20:20, 30:100, 40:151.9, 50:250, 60:483, 70:750, 80:992.4, 90:1095, 100:1172.1},
-          {0:0.68, 10:0.68, 20:0.68, 30:0.68, 40:0.68, 50:0.68, 60:0.68, 70:0.68, 80:0.68, 90:0.68, 100:0.68},
-          {10:0.50, 20:0.40, 30:0.30, 40:0.20, 50:0.18, 60:0.17, 70:0.16, 80:0.15, 90:0.14, 100:0.13},
-          1, 8.0, 4),      
-    
-]
+VALVE_DATABASE = load_valves_from_excel()
+# ========================
+# VALVE MODELS (static mapping)
+# ========================
 
 VALVE_MODELS = {
     "1\" E33": "https://example.com/models/0_5E31.glb",
@@ -1796,7 +1674,7 @@ def get_valve_display_name(valve):
     return f"{valve.size}\" E{valve.valve_type}{rating_code}"
 
 def create_valve_dropdown():
-    valves = sorted(VALVE_DATABASE, key=lambda v: (v.size, v.rating_class, v.valve_type))
+    valves = sorted(st.session_state.valve_database, key=lambda v: (v.size, v.rating_class, v.valve_type))
     valve_options = {get_valve_display_name(v): v for v in valves}
     return valve_options
 
@@ -2150,6 +2028,8 @@ def valve_3d_viewer(valve_name, model_url):
     components.html(html_code, height=1000)
 
 def main():
+    # Global değişkeni kullanacağımızı belirtiyoruz
+    global VALVE_DATABASE
     st.set_page_config(
         page_title="Control Valve Sizing",
         page_icon="🔧",
@@ -2285,7 +2165,8 @@ def main():
         }
         </style>
     """, unsafe_allow_html=True)
-    
+    if 'valve_database' not in st.session_state:
+        st.session_state.valve_database =   VALVE_DATABASE
     if 'results' not in st.session_state:
         st.session_state.results = None
     if 'valve' not in st.session_state:
@@ -2371,6 +2252,123 @@ def main():
     if show_simulation_btn:
         st.session_state.show_simulation = True
         st.session_state.show_3d_viewer = False
+    
+    with st.sidebar:
+        st.header("Valve Management")
+        
+        if st.button("Reload Valve Database"):
+            VALVE_DATABASE = load_valves_from_excel()
+            st.session_state.valve_database = VALVE_DATABASE
+            st.success("Valve database reloaded!")
+        
+        with st.expander("Add New Valve"):
+            size = st.number_input("Size (inch)", min_value=0.5, step=0.5)
+            rating_class = st.selectbox("Rating Class", [150, 300, 600, 900, 1500])
+            valve_type = st.selectbox("Valve Type", [3, 4], format_func=lambda x: "Globe" if x == 3 else "Axial")
+            fd = st.number_input("Fd", value=1.0)
+            diameter = st.number_input("Diameter (inch)", min_value=0.1)
+            
+            st.subheader("Valve Characteristics Tables")
+            
+            # Default values for each characteristic
+            default_openings = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+            default_cv = [0.0, 3.28, 7.39, 12.0, 14.2, 14.9, 15.3, 15.7, 16.0, 16.4, 16.8]
+            default_fl = [0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68, 0.68]
+            default_xt = [0.581, 0.605, 0.617, 0.644, 0.764, 0.790, 0.809, 0.813, 0.795, 0.768, 0.74]
+            
+            # Create editable dataframes
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.markdown("**Cv Table**")
+                cv_data = pd.DataFrame({
+                    "Opening (%)": default_openings,
+                    "Cv": default_cv
+                })
+                cv_edited = st.data_editor(
+                    cv_data,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"cv_editor_{size}_{rating_class}_{valve_type}"
+                )
+            
+            with col2:
+                st.markdown("**Fl Table**")
+                fl_data = pd.DataFrame({
+                    "Opening (%)": default_openings,
+                    "Fl": default_fl
+                })
+                fl_edited = st.data_editor(
+                    fl_data,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"fl_editor_{size}_{rating_class}_{valve_type}"
+                )
+            
+            with col3:
+                st.markdown("**Xt Table**")
+                xt_data = pd.DataFrame({
+                    "Opening (%)": default_openings,
+                    "Xt": default_xt
+                })
+                xt_edited = st.data_editor(
+                    xt_data,
+                    num_rows="dynamic",
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"xt_editor_{size}_{rating_class}_{valve_type}"
+                )
+            
+            if st.button("Add Valve to Database"):
+                try:
+                    # Convert edited data to dictionaries
+                    cv_dict = {}
+                    for _, row in cv_edited.iterrows():
+                        opening = int(row['Opening (%)'])
+                        cv = float(row['Cv'])
+                        cv_dict[opening] = cv
+                    
+                    fl_dict = {}
+                    for _, row in fl_edited.iterrows():
+                        opening = int(row['Opening (%)'])
+                        fl = float(row['Fl'])
+                        fl_dict[opening] = fl
+                    
+                    xt_dict = {}
+                    for _, row in xt_edited.iterrows():
+                        opening = int(row['Opening (%)'])
+                        xt = float(row['Xt'])
+                        xt_dict[opening] = xt
+                    
+                    new_valve = Valve(
+                        size_inch=size,
+                        rating_class=rating_class,
+                        cv_table=cv_dict,
+                        fl_table=fl_dict,
+                        xt_table=xt_dict,
+                        fd=fd,
+                        d_inch=diameter,
+                        valve_type=valve_type
+                    )
+                    add_valve_to_database(new_valve)
+                    VALVE_DATABASE = load_valves_from_excel()
+                    st.session_state.valve_database = VALVE_DATABASE
+                    st.success("Valve added to database!")
+                except Exception as e:
+                    st.error(f"Error adding valve: {str(e)}")
+        
+        with st.expander("Delete Valve"):
+            valve_options = {get_valve_display_name(v): v for v in VALVE_DATABASE}
+            valve_to_delete = st.selectbox("Select Valve to Delete", list(valve_options.keys()))
+            
+            if st.button("Delete Valve"):
+                valve = valve_options[valve_to_delete]
+                delete_valve_from_database(valve.size, valve.rating_class, valve.valve_type)
+                VALVE_DATABASE = load_valves_from_excel()
+                st.session_state.valve_database = VALVE_DATABASE
+                st.success("Valve deleted from database!")
     
     tab1, tab2, tab3, tab_results = st.tabs(["Scenario 1", "Scenario 2", "Scenario 3", "Results"])
     
@@ -2845,4 +2843,3 @@ def main():
 # Run the main function
 if __name__ == "__main__":
     main()
- 
