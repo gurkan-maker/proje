@@ -127,4 +127,4 @@ def delete_valve_from_database(size, rating_class, valve_type):
         v.rating_class == rating_class and 
         v.valve_type == valve_type
     )]
-    save_valves_to_excel(valves)
+    save_valves_to_excel(valves) 
