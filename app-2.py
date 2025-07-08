@@ -2198,8 +2198,12 @@ def main():
         st.markdown("**ISA/IEC Standards Compliant Valve Sizing with Enhanced Visualization**")
     
     with st.sidebar:
-        st.header("VASTAŞ")
-        
+        st.header("VASTAŞ Logo")
+        logo_upload = st.file_uploader("Upload VASTAŞ logo", type=["png", "jpg", "jpeg"], key="logo_uploader")
+        if logo_upload is not None:
+            st.session_state.logo_bytes = logo_upload.getvalue()
+            st.session_state.logo_type = "PNG"
+            st.success("Logo uploaded successfully!")
         if st.session_state.logo_bytes:
             st.image(Image.open(BytesIO(st.session_state.logo_bytes)), use_container_width=True)
         elif os.path.exists("logo.png"):
