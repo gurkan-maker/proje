@@ -1,4 +1,4 @@
-from valve_database import load_valves_from_excel, add_valve_to_database, delete_valve_from_database, delete_valve_from_database
+from valve_database import load_valves_from_excel, add_valve_to_database, delete_valve_from_database
 from valve import Valve
 from scipy.interpolate import CubicSpline
 import streamlit as st
@@ -31,6 +31,7 @@ F_TO_R = 459.67
 PSI_TO_BAR = 0.0689476
 G_CONST = 9.80665
 MMHG_TO_BAR = 0.00133322
+VELOCITY_LIMITS = {"liquid": 5, "gas": 15, "steam": 15}  # m/s
 
 CONSTANTS = {
     "N1": {"gpm, psia": 1.00, "m³/h, bar": 0.865, "m³/h, kPa": 0.0865},
@@ -833,6 +834,8 @@ def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitati
                 status = "❌ Choked Flow"
             elif "Insufficient" in warnings[i]:
                 status = "❌ Insufficient Capacity"
+            elif "High velocity" in warnings[i]:
+                status = "⚠️ High Velocity"
             
             results_data.append([
                 scenario["name"],
@@ -1329,6 +1332,56 @@ def plot_flow_vs_dp_matplotlib(scenario, valve, op_point, details, req_cv):
     return buf.getvalue()
 
 # ========================
+# VELOCITY CALCULATION
+# ========================
+def calculate_valve_velocity(scenario, valve, op_point):
+    """Calculate flow velocity at valve opening point"""
+    # Get Cv at operating point
+    cv_op = valve.get_cv_at_opening(op_point)
+    cv_100 = valve.get_cv_at_opening(100)
+    
+    # Calculate valve area at full opening (assume circular flow path)
+    diameter_in = valve.diameter
+    area_full = math.pi * (diameter_in * 0.0254 / 2)**2  # in m²
+    
+    # Calculate flow area at operating point (assume proportional to Cv)
+    if cv_100 > 0:
+        area_op = area_full * (cv_op / cv_100)
+    else:
+        area_op = area_full
+    
+    # Calculate volumetric flow in m³/s
+    if scenario["fluid_type"] == "liquid":
+        flow_m3s = scenario["flow"] / 3600  # Convert m³/h to m³/s
+    elif scenario["fluid_type"] == "gas":
+        # Convert standard flow to actual flow at valve conditions
+        T_actual = scenario["temp"] + C_TO_K  # K
+        P_actual = scenario["p1"] * 1e5  # Pa
+        T_std = 288.15  # K (15°C)
+        P_std = 101325  # Pa (1 atm)
+        Q_std = scenario["flow"]  # std m³/h
+        Q_actual = Q_std * (P_std / P_actual) * (T_actual / T_std) * scenario["z"]
+        flow_m3s = Q_actual / 3600  # Convert to m³/s
+    else:  # steam
+        mass_flow = scenario["flow"]  # kg/h
+        density = scenario["rho"]  # kg/m³
+        volume_flow = mass_flow / density  # m³/h
+        flow_m3s = volume_flow / 3600  # Convert to m³/s
+    
+    # Calculate velocity
+    if area_op > 0:
+        velocity = flow_m3s / area_op
+    else:
+        velocity = 0
+    
+    # Check against limits
+    velocity_warning = ""
+    if velocity > VELOCITY_LIMITS.get(scenario["fluid_type"], 10):
+        velocity_warning = f"High velocity ({velocity:.1f} m/s) for {scenario['fluid_type']}! (max {VELOCITY_LIMITS.get(scenario['fluid_type'], 10)} m/s)"
+    
+    return velocity, velocity_warning
+
+# ========================
 # RECOMMENDED VALVE LOGIC
 # ========================
 def evaluate_valve_for_scenario(valve, scenario):
@@ -1351,38 +1404,10 @@ def evaluate_valve_for_scenario(valve, scenario):
     else:
         xt = valve.get_xt_at_opening(100)
     
-   # Calculate velocity
-    valve_diameter_m = valve.diameter * 0.0254
-    valve_area = math.pi * (valve_diameter_m/2)**2
+    # Calculate velocity
+    velocity, velocity_warning = calculate_valve_velocity(scenario, valve, 100)  # Initial at full opening
     
-    if scenario['fluid_type'] == "liquid":
-        flow_m3s = scenario['flow'] / 3600
-        velocity = flow_m3s / valve_area
-        
-    elif scenario['fluid_type'] == "gas":
-        # Convert standard flow to actual flow at valve inlet conditions
-        T_actual = scenario['temp'] + C_TO_K  # Actual temperature in K
-        P_actual = scenario['p1'] * 1e5       # Actual pressure in Pa
-        R = 8.314462618  # Universal gas constant
-        
-        # Standard conditions (ISA standard: 15°C, 1.01325 bar)
-        T_std = 288.15  # K (15°C)
-        P_std = 1.01325 * 1e5  # Pa (1 atm)
-        
-        # Calculate actual volumetric flow
-        Q_std = scenario['flow']  # Standard volumetric flow
-        Q_actual = Q_std * (P_std / P_actual) * (T_actual / T_std) * (scenario['z'] / 1.0)
-        
-        # Convert to m³/s and calculate velocity
-        Q_actual_m3s = Q_actual / 3600
-        velocity = Q_actual_m3s / valve_area
-        
-    elif scenario['fluid_type'] == "steam":
-        volume_flow_m3h = scenario['flow'] / scenario['rho']
-        volume_flow_m3s = volume_flow_m3h / 3600
-        velocity = volume_flow_m3s / valve_area
-    
-    # Calculate required Cv
+   # Calculate required Cv
     if scenario["fluid_type"] == "liquid":
         if scenario.get('fluid_library') in FLUID_LIBRARY:
             fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
@@ -1562,6 +1587,10 @@ def evaluate_valve_for_scenario(valve, scenario):
         else:
             details['cavitation_severity'] = "No choked flow"
     
+    # Recalculate velocity at actual operating point
+    velocity, new_velocity_warning = calculate_valve_velocity(scenario, valve, open_percent)
+    velocity_warning = new_velocity_warning or velocity_warning
+    
     if 'error' in details:
         return {
             "op_point": 0,
@@ -1588,6 +1617,15 @@ def evaluate_valve_for_scenario(valve, scenario):
         status = "yellow"
     else:
         status = "green"
+    
+    # Add velocity warning
+    if velocity_warning:
+        if warn:
+            warn += "; " + velocity_warning
+        else:
+            warn = velocity_warning
+            if status == "green":
+                status = "yellow"
     
     # Override status based on flow conditions
     if details.get('is_choked', False):
@@ -2094,6 +2132,10 @@ def main():
             background-color: #ffe8cc;
             border-left: 5px solid #fd7e14;
         }
+        .velocity-card {
+            background-color: #ffd8d8;
+            border-left: 5px solid #ff4b4b;
+        }
         .logo-container {
             display: flex;
             justify-content: center;
@@ -2161,7 +2203,11 @@ def main():
         }
         .status-insufficient {
             background-color: #f8d7da;
-            border: 2px solid #8b0000; /* Dark red border for insufficient capacity */
+            border: 2px solid #8b0000;
+        }
+        .status-velocity {
+            background-color: #ffd8d8;
+            border: 2px solid #ff4b4b;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -2424,6 +2470,8 @@ def main():
                     status_class = ""
                     if "Insufficient" in result["warning"]:
                         status_class = "insufficient-card"
+                    elif "High velocity" in result["warning"]:
+                        status_class = "velocity-card"
                     elif result["status"] == "green":
                         status_class = "success-card"
                     elif result["status"] == "yellow":
@@ -2462,6 +2510,7 @@ def main():
                     - **Orange status**: Severe cavitation risk
                     - **Red status**: Choked flow (unacceptable)
                     - **Dark red**: Insufficient capacity (valve undersized)
+                    - **Pink**: High velocity warning
                     """)
                     st.markdown(f"""
                     **Selection criteria**:
@@ -2489,6 +2538,8 @@ def main():
                 status = "success-card"
                 if "Insufficient" in result["warning"]:
                     status = "insufficient-card"
+                elif "High velocity" in result["warning"]:
+                    status = "velocity-card"
                 elif result["status"] == "yellow":
                     status = "warning-card"
                 elif result["status"] == "orange":
@@ -2573,6 +2624,10 @@ def main():
                         else:
                             st.markdown(f"**Average Velocity in Valve:** {velocity_val} m/s")
                         
+                        # Velocity warning if present
+                        if "High velocity" in result["warning"]:
+                            st.warning(f"**Velocity Warning:** {result['warning']}")
+                        
                         if scenario["fluid_type"] == "liquid":
                             if result["details"].get('cavitation_severity'):
                                 st.subheader("Cavitation Analysis")
@@ -2642,6 +2697,7 @@ def main():
             - <span style="background-color:#ffe8cc; padding:2px 5px;">Orange</span>: Severe cavitation
             - <span style="background-color:#f8d7da; padding:2px 5px;">Red</span>: Choked flow (unacceptable)
             - <span style="background-color:#f8d7da; border:2px solid #8b0000; padding:2px 5px;">Dark Red</span>: Insufficient capacity
+            - <span style="background-color:#ffd8d8; padding:2px 5px;">Pink</span>: High velocity
             """, unsafe_allow_html=True)
             all_valves_table_html = """
             <table class="valve-table">
@@ -2668,6 +2724,8 @@ def main():
                     status_class = ""
                     if "Insufficient" in result["warning"]:
                         status_class = "status-insufficient"
+                    elif "High velocity" in result["warning"]:
+                        status_class = "status-velocity"
                     elif result["status"] == "green":
                         status_class = "status-green"
                     elif result["status"] == "yellow":
