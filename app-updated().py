@@ -1027,14 +1027,14 @@ def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitati
 def get_simulation_image(valve_name):
     simulation_images = {
         
-        "2\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/2.0e33.png",
-        "4\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/4.0e33.png",
-        "8\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/8e33.png",
-        "8.0\" E43": "https://raw.githubusercontent.com/gurkan-maker/proje/refs/heads/Final3/8e43.png",
-        "12\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/12.0e33.png",
-        "16\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/16.0e33.png",
-        "20\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/20.0e33.png",
-        "30\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/30.0e33.png",
+        "2.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/2e33.png",
+        "4.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/4e33.png",
+        "8.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/8e33.png",
+        "8.0\" E43": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/8e43.png",
+        "12.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/12e33.png",
+        "16.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/16e33.png",
+        "20.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/20e33.png",
+        "30.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/30e33.png",
     }
     return simulation_images.get(valve_name, "https://via.placeholder.com/1200x900.png?text=Simulation+Not+Available")
 
@@ -1671,10 +1671,6 @@ def get_valve_display_name(valve):
         2500: 6
     }
     rating_code = rating_code_map.get(valve.rating_class, valve.rating_class)
-    # Convert size to int if whole number, else keep float
-    size = valve.size
-    if size.is_integer():
-        size = int(size)
     return f"{valve.size}\" E{valve.valve_type}{rating_code}"
 
 def create_valve_dropdown():
@@ -2685,93 +2681,7 @@ def main():
             all_valves_table_html += "</tbody></table>"
             st.markdown(all_valves_table_html, unsafe_allow_html=True)
             
-            st.subheader("Detailed Results")
-            for i, scenario in enumerate(scenarios):
-                with st.expander(f"Scenario {i+1}: {scenario['name']}"):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown("**Process Conditions**")
-                        st.markdown(f"- Fluid Type: {scenario['fluid_type'].title()}")
-                        st.markdown(f"- Flow Rate: {scenario['flow']} "
-                                    f"{'m³/h' if scenario['fluid_type']=='liquid' else 'kg/h' if scenario['fluid_type']=='steam' else 'std m³/h'}")
-                        st.markdown(f"- Inlet Pressure (P1): {scenario['p1']:.2f} bar a")
-                        st.markdown(f"- Outlet Pressure (P2): {scenario['p2']:.2f} bar a")
-                        st.markdown(f"- Pressure Drop (dP): {scenario['p1'] - scenario['p2']:.2f} bar")
-                        st.markdown(f"- Temperature: {scenario['temp']}°C")
-                    with col2:
-                        st.markdown("**Fluid Properties**")
-                        if scenario["fluid_type"] == "liquid":
-                            st.markdown(f"- Specific Gravity: {scenario['sg']:.3f}")
-                            st.markdown(f"- Viscosity: {scenario['visc']} cSt")
-                            st.markdown(f"- Vapor Pressure: {scenario['pv']:.4f} bar a")
-                            st.markdown(f"- Critical Pressure: {scenario['pc']:.2f} bar a")
-                        elif scenario["fluid_type"] == "gas":
-                            st.markdown(f"- Specific Gravity (air=1): {scenario['sg']:.3f}")
-                            st.markdown(f"- Specific Heat Ratio (k): {scenario['k']:.3f}")
-                            st.markdown(f"- Compressibility Factor (Z): {scenario['z']:.3f}")
-                        else:
-                            st.markdown(f"- Density: {scenario['rho']:.3f} kg/m³")
-                            st.markdown(f"- Specific Heat Ratio (k): {scenario['k']:.3f}")
-                        st.markdown(f"- Pipe Diameter: {scenario['pipe_d']} in")
-                    st.markdown("**Sizing Results**")
-                    st.markdown(f"- Theoretical Cv: {selected_valve_results[i]['theoretical_cv']:.1f}")
-                    st.markdown(f"- Corrected Cv: {selected_valve_results[i]['req_cv']:.1f}")
-                    st.markdown(f"- Operating Point: {selected_valve_results[i]['op_point']:.1f}% open")
-                    st.markdown(f"- Actual Cv at Operating Point: {selected_valve.get_cv_at_opening(selected_valve_results[i]['op_point']):.1f}")
-                    st.markdown(f"- Margin: {selected_valve_results[i]['margin']:.1f}%")
-                    status_msg = "Optimal" if selected_valve_results[i]['status'] == "green" else "Warning" if selected_valve_results[i]['status'] == "yellow" else "Severe Cavitation" if selected_valve_results[i]['status'] == "orange" else "Critical (Choked)" if selected_valve_results[i]['status'] == "red" else "Insufficient Capacity"
-                    st.markdown(f"- Status: {status_msg}")
-                    if selected_valve_results[i]['warning']:
-                        st.markdown(f"- Warning: {selected_valve_results[i]['warning']}")
-                    if selected_valve_results[i]['cavitation_info']:
-                        st.markdown(f"- Flow Status: {selected_valve_results[i]['cavitation_info']}")
-                    
-                    # Add detailed calculation parameters
-                    st.markdown("**Calculation Parameters**")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        fl_at_op = result['details'].get('fl_at_op', 'N/A')
-                        if isinstance(fl_at_op, (int, float)):
-                            st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op:.3f}")
-                        else:
-                            st.markdown(f"**Fl (Liquid Recovery):** {fl_at_op}")
-                        st.markdown(f"**Fd (Valve Style Modifier):** {selected_valve.fd:.2f}")
-                        st.markdown(f"**Fp (Piping Factor):** {result['details'].get('fp', 1.0):.4f}")
-                        
-                    with col2:
-                        if scenario["fluid_type"] == "liquid":
-                            st.markdown(f"**FF (Critical Pressure Ratio):** {result['details'].get('ff', 0.96):.4f}")
-                            st.markdown(f"**Fr (Viscosity Correction):** {result['details'].get('fr', 1.0):.4f}")
-                            st.markdown(f"**Reynolds Number:** {result['details'].get('reynolds', 0):.0f}")
-                    
-                    st.markdown(f"**Max Pressure Drop (ΔPmax):** {result['details'].get('dp_max', 0):.2f} bar")
-                    st.markdown(f"**Average Velocity in Valve:** {result.get('velocity', 0):.2f} m/s")
-                    
-                    if scenario["fluid_type"] == "liquid":
-                        if result["details"].get('cavitation_severity'):
-                            st.subheader("Cavitation Analysis")
-                            st.markdown(f"**Status:** {result['details']['cavitation_severity']}")
-                            st.markdown(f"**Sigma (σ):** {result['details'].get('sigma', 0):.2f}")
-                            st.markdown(f"**Km (Valve Recovery Coefficient):** {result['details'].get('km', 0):.2f}")
-                    
-                    if scenario["fluid_type"] in ["gas", "steam"]:
-                        st.subheader("Choked Flow Analysis")
-                        st.markdown(f"**Status:** {result['cavitation_info']}")
-                        st.markdown(f"**Pressure Drop Ratio (x):** {result['details'].get('x_actual', 0):.4f}")
-                        st.markdown(f"**Critical Pressure Drop Ratio (x_crit):** {result['details'].get('x_crit', 0):.4f}")
-                        st.markdown(f"**Pressure Drop Ratio Factor (xT or xTP):** {result['details'].get('xt_at_op', 0):.4f}")
-                        st.markdown(f"**Choked Pressure Drop:** {result['details'].get('x_crit', 0) * scenario['p1']:.2f} bar")
-                    
-                    st.subheader("Flow Rate vs Pressure Drop")
-                    flow_fig = generate_flow_vs_dp_graph(
-                        scenario,
-                        selected_valve,
-                        result["op_point"],
-                        result["details"],
-                        result["req_cv"]
-                    )
-                    st.plotly_chart(flow_fig, use_container_width=True, key=f"detailed_flow_dp_{i}")
-    
+               
     # Handle export button
     if export_btn:
         if st.session_state.results is None:
