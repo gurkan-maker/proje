@@ -1671,6 +1671,10 @@ def get_valve_display_name(valve):
         2500: 6
     }
     rating_code = rating_code_map.get(valve.rating_class, valve.rating_class)
+    # Convert size to int if whole number, else keep float
+    size = valve.size
+    if size.is_integer():
+        size = int(size)
     return f"{valve.size}\" E{valve.valve_type}{rating_code}"
 
 def create_valve_dropdown():
