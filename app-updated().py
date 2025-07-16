@@ -1029,8 +1029,8 @@ def get_simulation_image(valve_name):
         
         "2.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/2.0e33.png",
         "4.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/4.0e33.png",
-        "8.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/8.0e33.png",
-        "8.0\" E43": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/8.0e43.png",
+        "8.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/8e33.png",
+        "8.0\" E43": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/8e43.png",
         "12.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/12.0e33.png",
         "16.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/16.0e33.png",
         "20.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Final3/20.0e33.png",
