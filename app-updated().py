@@ -1027,14 +1027,14 @@ def generate_pdf_report(scenarios, valve, op_points, req_cvs, warnings, cavitati
 def get_simulation_image(valve_name):
     simulation_images = {
         
-        "2\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/2e33.png",
-        "4\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/4e33.png",
-        "8\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/8e33.png",
-        "8\" E43": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/8e43.png",
-        "12\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/12e33.png",
-        "16\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/16e33.png",
-        "20\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/20e33.png",
-        "30\" E33": "https://raw.githubusercontent.com/gurkan-maker/demo2/main/30e33.png",
+        "2.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/2e33.png",
+        "4.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/4e33.png",
+        "8.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/8e33.png",
+        "8.0\" E43": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/8e43.png",
+        "12.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/12e33.png",
+        "16.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/16e33.png",
+        "20.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/20e33.png",
+        "30.0\" E33": "https://raw.githubusercontent.com/gurkan-maker/proje/Fianl3/30e33.png",
     }
     return simulation_images.get(valve_name, "https://via.placeholder.com/1200x900.png?text=Simulation+Not+Available")
 
