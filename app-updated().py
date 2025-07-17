@@ -60,6 +60,16 @@ FLUID_LIBRARY = {
         "pc_func": lambda: CP.PropsSI('Pcrit', 'Water') / 1e5,
         "rho_func": lambda t, p: calculate_density("Water", t, p)
     },
+    "Air": {
+        "type": "gas",
+        "coolprop_name": "Air",
+        "sg": 1.0,
+        "visc_func": None,
+        "k_func": lambda t, p: calculate_specific_heat_ratio("Air", t, p),
+        "z_func": lambda t, p: calculate_compressibility_factor("Air", t, p),
+        "pv_func": None,
+        "rho_func": lambda t, p: calculate_density("Air", t, p)
+    },
     "Methane": {
         "type": "gas",
         "coolprop_name": "Methane",
