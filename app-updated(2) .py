@@ -1416,8 +1416,8 @@ def evaluate_valve_for_scenario(valve, scenario):
         xt = valve.get_xt_at_opening(100)
     
     # Calculate velocity
-    orifice_velocity, orifice_warning, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, 100)
-    velocity_warning = orifice_warning + "; " + inlet_warning if orifice_warning or inlet_warning else ""  # Initial at full opening
+    orifice_velocity, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, 100)
+    velocity_warning = inlet_warning if inlet_warning else ""  # Initial at full opening
     
    # Calculate required Cv
     if scenario["fluid_type"] == "liquid":
@@ -1600,8 +1600,8 @@ def evaluate_valve_for_scenario(valve, scenario):
             details['cavitation_severity'] = "No choked flow"
     
     # Recalculate velocity at actual operating point
-    orifice_velocity, orifice_warning, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, open_percent)
-    new_velocity_warning = orifice_warning + "; " + inlet_warning if orifice_warning or inlet_warning else ""
+    orifice_velocity, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, open_percent)
+    new_velocity_warning = inlet_warning if inlet_warning else ""
     velocity_warning = new_velocity_warning or velocity_warning
     
     if 'error' in details:
