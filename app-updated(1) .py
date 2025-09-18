@@ -1660,7 +1660,8 @@ def evaluate_valve_for_scenario(valve, scenario):
         "status": status,
         "margin": (cv_valve / cv_req - 1) * 100 if cv_req > 0 else 0,
         "details": details,
-        "velocity": velocity
+        "orifice_velocity": orifice_velocity,
+        "inlet_velocity": inlet_velocity
     }
 
 def find_recommended_valve(scenarios):
