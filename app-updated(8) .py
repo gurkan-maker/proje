@@ -1407,102 +1407,45 @@ def evaluate_valve_for_scenario(valve, scenario):
     cv_100 = valve.get_cv_at_opening(100)
     fp = calculate_piping_factor_fp(valve_d, pipe_d, cv_100)
     
-    # Initialize iteration tracking
-    iteration_details = []
-    
-    if scenario["fluid_type"] in ["gas", "steam"]:
-        if abs(pipe_d - valve_d) > 0.01:
-            xt = calculate_x_tp(valve, valve_d, pipe_d, fp)
-        else:
-            xt = valve.get_xt_at_opening(100)
-    else:
-        xt = valve.get_xt_at_opening(100)
-    
-    # Calculate velocity
+    # Calculate velocity at full opening for initial warning
     orifice_velocity, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, 100)
-    velocity_warning = inlet_warning if inlet_warning else ""  # Initial at full opening
+    velocity_warning = inlet_warning if inlet_warning else ""
     
-    # Calculate required Cv
-    if scenario["fluid_type"] == "liquid":
-        if scenario.get('fluid_library') in FLUID_LIBRARY:
-            fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
-            scenario["visc"] = fluid_data["visc_func"](scenario["temp"], scenario["p1"])
-            scenario["pv"] = fluid_data["pv_func"](scenario["temp"], scenario["p1"])
-            if "pc_func" in fluid_data:
-                scenario["pc"] = fluid_data["pc_func"]()
+    # Initialize variables for iteration
+    max_iterations = 10
+    tolerance = 0.1  # 0.1% change in opening point
+    prev_op_point = 50  # Start with 50% as initial guess
+    current_op_point = prev_op_point
+    iteration_count = 0
+    converged = False
+    
+    # Iteration loop for convergence
+    while iteration_count < max_iterations and not converged:
+        iteration_count += 1
         
-        # First pass: calculate with Fl at 50% opening (initial guess)
-        fl_at_op = valve.get_fl_at_opening(50)
+        # Get valve characteristics at current operating point
+        fl_at_op = valve.get_fl_at_opening(current_op_point)
+        xt_at_op = valve.get_xt_at_opening(current_op_point)
         
-        cv_req, details = cv_liquid(
-            flow=scenario["flow"],
-            p1=scenario["p1"],
-            p2=scenario["p2"],
-            sg=scenario["sg"],
-            fl_at_op=fl_at_op,
-            pv=scenario["pv"],
-            pc=scenario["pc"],
-            visc_cst=scenario["visc"],
-            d_m=valve.diameter * 0.0254,
-            valve=valve,
-            fp=fp
-        )
+        # Apply piping corrections if needed
+        if abs(pipe_d - valve_d) > 0.01:
+            if scenario["fluid_type"] in ["gas", "steam"]:
+                xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
+            else:
+                # For liquids, we might need FLP calculation
+                flp_at_op = calculate_flp(valve, valve_d, pipe_d, cv_100)
+                # Use the minimum of Fl and FLP for conservative approach
+                fl_at_op = min(fl_at_op, flp_at_op)
         
-        # Find initial operating point
-        open_percent = 10
-        while open_percent <= 100:
-            cv_valve = valve.get_cv_at_opening(open_percent)
-            if cv_valve >= cv_req:
-                break
-            open_percent += 1
-        
-        iteration_details.append({
-            "iteration": 1,
-            "opening_guess": 50,
-            "fl_used": fl_at_op,
-            "calculated_opening": open_percent,
-            "cv_req": cv_req,
-            "cv_valve": cv_valve
-        })
-        
-        # Second pass: recalculate with Fl at actual operating point
-        fl_at_op = valve.get_fl_at_opening(open_percent)
-        cv_req, details = cv_liquid(
-            flow=scenario["flow"],
-            p1=scenario["p1"],
-            p2=scenario["p2"],
-            sg=scenario["sg"],
-            fl_at_op=fl_at_op,
-            pv=scenario["pv"],
-            pc=scenario["pc"],
-            visc_cst=scenario["visc"],
-            d_m=valve.diameter * 0.0254,
-            valve=valve,
-            fp=fp
-        )
-        
-        # Recalculate operating point with updated cv_req
-        new_open_percent = 10
-        while new_open_percent <= 100:
-            cv_valve = valve.get_cv_at_opening(new_open_percent)
-            if cv_valve >= cv_req:
-                break
-            new_open_percent += 1
+        # Calculate required Cv with current characteristics
+        if scenario["fluid_type"] == "liquid":
+            if scenario.get('fluid_library') in FLUID_LIBRARY:
+                fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
+                scenario["visc"] = fluid_data["visc_func"](scenario["temp"], scenario["p1"])
+                scenario["pv"] = fluid_data["pv_func"](scenario["temp"], scenario["p1"])
+                if "pc_func" in fluid_data:
+                    scenario["pc"] = fluid_data["pc_func"]()
             
-        iteration_details.append({
-            "iteration": 2,
-            "opening_guess": open_percent,
-            "fl_used": fl_at_op,
-            "calculated_opening": new_open_percent,
-            "cv_req": cv_req,
-            "cv_valve": cv_valve
-        })
-        
-        open_percent = new_open_percent
-        
-        # Third pass: final iteration for convergence
-        if open_percent != new_open_percent:
-            fl_at_op = valve.get_fl_at_opening(open_percent)
             cv_req, details = cv_liquid(
                 flow=scenario["flow"],
                 p1=scenario["p1"],
@@ -1517,111 +1460,22 @@ def evaluate_valve_for_scenario(valve, scenario):
                 fp=fp
             )
             
-            final_open_percent = 10
-            while final_open_percent <= 100:
-                cv_valve = valve.get_cv_at_opening(final_open_percent)
-                if cv_valve >= cv_req:
-                    break
-                final_open_percent += 1
+            # Cavitation check for liquids
+            if scenario["pc"] > 0:
+                choked, sigma, km, cav_msg = check_cavitation(
+                    scenario["p1"], scenario["p2"], scenario["pv"], fl_at_op, scenario["pc"]
+                )
+                details['is_choked'] = choked
+                details['cavitation_severity'] = cav_msg
+            else:
+                details['cavitation_severity'] = "Critical pressure not available"
                 
-            iteration_details.append({
-                "iteration": 3,
-                "opening_guess": open_percent,
-                "fl_used": fl_at_op,
-                "calculated_opening": final_open_percent,
-                "cv_req": cv_req,
-                "cv_valve": cv_valve
-            })
-            
-            open_percent = final_open_percent
-            
-        if scenario["pc"] > 0:
-            choked, sigma, km, cav_msg = check_cavitation(
-                scenario["p1"], scenario["p2"], scenario["pv"], fl_at_op, scenario["pc"]
-            )
-            details['is_choked'] = choked
-            details['cavitation_severity'] = cav_msg
-        else:
-            details['cavitation_severity'] = "Critical pressure not available"
-        
-    elif scenario["fluid_type"] == "gas":
-        if scenario.get('fluid_library') in FLUID_LIBRARY:
-            fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
-            scenario["k"] = fluid_data["k_func"](scenario["temp"], scenario["p1"])
-            if "z_func" in fluid_data:
-                scenario["z"] = fluid_data["z_func"](scenario["temp"], scenario["p1"])
-        
-        # First pass: calculate with Xt at 100% opening
-        cv_req, details = cv_gas(
-            flow=scenario["flow"],
-            p1=scenario["p1"],
-            p2=scenario["p2"],
-            sg=scenario["sg"],
-            t=scenario["temp"],
-            k=scenario["k"],
-            xt_at_op=xt,
-            z=scenario["z"],
-            fp=fp
-        )
-        
-        # First pass: calculate operating point
-        open_percent = 10
-        while open_percent <= 100:
-            cv_valve = valve.get_cv_at_opening(open_percent)
-            if cv_valve >= cv_req:
-                break
-            open_percent += 1
-        
-        iteration_details.append({
-            "iteration": 1,
-            "opening_guess": 100,  # Initial Xt was at 100%
-            "xt_used": xt,
-            "calculated_opening": open_percent,
-            "cv_req": cv_req,
-            "cv_valve": cv_valve
-        })
-        
-        # Second pass: recalculate with Xt at actual operating point
-        xt_at_op = valve.get_xt_at_opening(open_percent)
-        if abs(pipe_d - valve_d) > 0.01:
-            xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
-        
-        cv_req, details = cv_gas(
-            flow=scenario["flow"],
-            p1=scenario["p1"],
-            p2=scenario["p2"],
-            sg=scenario["sg"],
-            t=scenario["temp"],
-            k=scenario["k"],
-            xt_at_op=xt_at_op,
-            z=scenario["z"],
-            fp=fp
-        )
-        
-        # Recalculate operating point with updated cv_req
-        new_open_percent = 10
-        while new_open_percent <= 100:
-            cv_valve = valve.get_cv_at_opening(new_open_percent)
-            if cv_valve >= cv_req:
-                break
-            new_open_percent += 1
-            
-        iteration_details.append({
-            "iteration": 2,
-            "opening_guess": open_percent,
-            "xt_used": xt_at_op,
-            "calculated_opening": new_open_percent,
-            "cv_req": cv_req,
-            "cv_valve": cv_valve
-        })
-        
-        open_percent = new_open_percent
-        
-        # Third pass: final iteration for convergence
-        if open_percent != new_open_percent:
-            xt_at_op = valve.get_xt_at_opening(open_percent)
-            if abs(pipe_d - valve_d) > 0.01:
-                xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
+        elif scenario["fluid_type"] == "gas":
+            if scenario.get('fluid_library') in FLUID_LIBRARY:
+                fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
+                scenario["k"] = fluid_data["k_func"](scenario["temp"], scenario["p1"])
+                if "z_func" in fluid_data:
+                    scenario["z"] = fluid_data["z_func"](scenario["temp"], scenario["p1"])
             
             cv_req, details = cv_gas(
                 flow=scenario["flow"],
@@ -1635,103 +1489,17 @@ def evaluate_valve_for_scenario(valve, scenario):
                 fp=fp
             )
             
-            final_open_percent = 10
-            while final_open_percent <= 100:
-                cv_valve = valve.get_cv_at_opening(final_open_percent)
-                if cv_valve >= cv_req:
-                    break
-                final_open_percent += 1
+            # Choked flow check for gases
+            if details.get('is_choked', False):
+                details['cavitation_severity'] = "Choked flow detected"
+            else:
+                details['cavitation_severity'] = "No choked flow"
                 
-            iteration_details.append({
-                "iteration": 3,
-                "opening_guess": open_percent,
-                "xt_used": xt_at_op,
-                "calculated_opening": final_open_percent,
-                "cv_req": cv_req,
-                "cv_valve": cv_valve
-            })
-            
-            open_percent = final_open_percent
-            
-        # Set cavitation severity based on choked flow
-        if details.get('is_choked', False):
-            details['cavitation_severity'] = "Choked flow detected"
-        else:
-            details['cavitation_severity'] = "No choked flow"
-        
-    else:  # Steam
-        if scenario.get('fluid_library') in FLUID_LIBRARY:
-            fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
-            scenario["rho"] = fluid_data["rho_func"](scenario["temp"], scenario["p1"])
-            scenario["k"] = fluid_data["k_func"](scenario["temp"], scenario["p1"])
-        
-        # First pass: calculate with Xt at 100% opening
-        cv_req, details = cv_steam(
-            flow=scenario["flow"],
-            p1=scenario["p1"],
-            p2=scenario["p2"],
-            rho=scenario["rho"],
-            k=scenario["k"],
-            xt_at_op=xt,
-            fp=fp
-        )
-        
-        # First pass: calculate operating point
-        open_percent = 10
-        while open_percent <= 100:
-            cv_valve = valve.get_cv_at_opening(open_percent)
-            if cv_valve >= cv_req:
-                break
-            open_percent += 1
-        
-        iteration_details.append({
-            "iteration": 1,
-            "opening_guess": 100,  # Initial Xt was at 100%
-            "xt_used": xt,
-            "calculated_opening": open_percent,
-            "cv_req": cv_req,
-            "cv_valve": cv_valve
-        })
-        
-        # Second pass: recalculate with Xt at actual operating point
-        xt_at_op = valve.get_xt_at_opening(open_percent)
-        if abs(pipe_d - valve_d) > 0.01:
-            xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
-        
-        cv_req, details = cv_steam(
-            flow=scenario["flow"],
-            p1=scenario["p1"],
-            p2=scenario["p2"],
-            rho=scenario["rho"],
-            k=scenario["k"],
-            xt_at_op=xt_at_op,
-            fp=fp
-        )
-        
-        # Recalculate operating point with updated cv_req
-        new_open_percent = 10
-        while new_open_percent <= 100:
-            cv_valve = valve.get_cv_at_opening(new_open_percent)
-            if cv_valve >= cv_req:
-                break
-            new_open_percent += 1
-            
-        iteration_details.append({
-            "iteration": 2,
-            "opening_guess": open_percent,
-            "xt_used": xt_at_op,
-            "calculated_opening": new_open_percent,
-            "cv_req": cv_req,
-            "cv_valve": cv_valve
-        })
-        
-        open_percent = new_open_percent
-        
-        # Third pass: final iteration for convergence
-        if open_percent != new_open_percent:
-            xt_at_op = valve.get_xt_at_opening(open_percent)
-            if abs(pipe_d - valve_d) > 0.01:
-                xt_at_op = calculate_x_tp(valve, valve_d, pipe_d, fp)
+        else:  # steam
+            if scenario.get('fluid_library') in FLUID_LIBRARY:
+                fluid_data = FLUID_LIBRARY[scenario['fluid_library']]
+                scenario["rho"] = fluid_data["rho_func"](scenario["temp"], scenario["p1"])
+                scenario["k"] = fluid_data["k_func"](scenario["temp"], scenario["p1"])
             
             cv_req, details = cv_steam(
                 flow=scenario["flow"],
@@ -1743,63 +1511,129 @@ def evaluate_valve_for_scenario(valve, scenario):
                 fp=fp
             )
             
-            final_open_percent = 10
-            while final_open_percent <= 100:
-                cv_valve = valve.get_cv_at_opening(final_open_percent)
-                if cv_valve >= cv_req:
-                    break
-                final_open_percent += 1
-                
-            iteration_details.append({
-                "iteration": 3,
-                "opening_guess": open_percent,
-                "xt_used": xt_at_op,
-                "calculated_opening": final_open_percent,
-                "cv_req": cv_req,
-                "cv_valve": cv_valve
-            })
-            
-            open_percent = final_open_percent
-            
-        # Set cavitation severity based on choked flow
-        if details.get('is_choked', False):
-            details['cavitation_severity'] = "Choked flow detected"
+            # Choked flow check for steam
+            if details.get('is_choked', False):
+                details['cavitation_severity'] = "Choked flow detected"
+            else:
+                details['cavitation_severity'] = "No choked flow"
+        
+        # Find new operating point based on calculated Cv requirement
+        new_op_point = 10
+        while new_op_point <= 100:
+            cv_valve = valve.get_cv_at_opening(new_op_point)
+            if cv_valve >= cv_req:
+                break
+            new_op_point += 1
+        
+        # Check for convergence
+        if abs(new_op_point - current_op_point) <= tolerance:
+            converged = True
         else:
-            details['cavitation_severity'] = "No choked flow"
+            current_op_point = new_op_point
     
-    # Recalculate velocity at actual operating point
-    orifice_velocity, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, open_percent)
-    new_velocity_warning = inlet_warning if inlet_warning else ""
-    velocity_warning = new_velocity_warning or velocity_warning
+    # Final operating point after convergence or max iterations
+    final_op_point = current_op_point
     
-    if 'error' in details:
+    # Final calculation with converged values
+    fl_at_op_final = valve.get_fl_at_opening(final_op_point)
+    xt_at_op_final = valve.get_xt_at_opening(final_op_point)
+    
+    # Apply final piping corrections
+    if abs(pipe_d - valve_d) > 0.01:
+        if scenario["fluid_type"] in ["gas", "steam"]:
+            xt_at_op_final = calculate_x_tp(valve, valve_d, pipe_d, fp)
+        else:
+            flp_at_op_final = calculate_flp(valve, valve_d, pipe_d, cv_100)
+            fl_at_op_final = min(fl_at_op_final, flp_at_op_final)
+    
+    # Final Cv calculation with converged characteristics
+    if scenario["fluid_type"] == "liquid":
+        cv_req_final, details_final = cv_liquid(
+            flow=scenario["flow"],
+            p1=scenario["p1"],
+            p2=scenario["p2"],
+            sg=scenario["sg"],
+            fl_at_op=fl_at_op_final,
+            pv=scenario["pv"],
+            pc=scenario["pc"],
+            visc_cst=scenario["visc"],
+            d_m=valve.diameter * 0.0254,
+            valve=valve,
+            fp=fp
+        )
+        
+        # Final cavitation check
+        if scenario["pc"] > 0:
+            choked, sigma, km, cav_msg = check_cavitation(
+                scenario["p1"], scenario["p2"], scenario["pv"], fl_at_op_final, scenario["pc"]
+            )
+            details_final['is_choked'] = choked
+            details_final['cavitation_severity'] = cav_msg
+            
+    elif scenario["fluid_type"] == "gas":
+        cv_req_final, details_final = cv_gas(
+            flow=scenario["flow"],
+            p1=scenario["p1"],
+            p2=scenario["p2"],
+            sg=scenario["sg"],
+            t=scenario["temp"],
+            k=scenario["k"],
+            xt_at_op=xt_at_op_final,
+            z=scenario["z"],
+            fp=fp
+        )
+    else:  # steam
+        cv_req_final, details_final = cv_steam(
+            flow=scenario["flow"],
+            p1=scenario["p1"],
+            p2=scenario["p2"],
+            rho=scenario["rho"],
+            k=scenario["k"],
+            xt_at_op=xt_at_op_final,
+            fp=fp
+        )
+    
+    # Get actual Cv at final operating point
+    cv_valve_final = valve.get_cv_at_opening(final_op_point)
+    
+    # Recalculate velocity at final operating point
+    orifice_velocity_final, inlet_velocity_final, inlet_warning_final = calculate_valve_velocity(scenario, valve, final_op_point)
+    velocity_warning_final = inlet_warning_final if inlet_warning_final else ""
+    
+    # Combine warnings
+    velocity_warning = velocity_warning_final or velocity_warning
+    
+    # Error handling
+    if 'error' in details_final:
         return {
-            "op_point": open_percent,
-            "req_cv": cv_req,
-            "theoretical_cv": details.get('theoretical_cv', 0),
+            "op_point": final_op_point,
+            "req_cv": cv_req_final,
+            "theoretical_cv": details_final.get('theoretical_cv', 0),
             "warning": "Calculation error",
-            "cavitation_info": "N/A",
+            "cavitation_info": details_final.get('cavitation_severity', "N/A"),
             "status": "red",
             "margin": 0,
-            "details": details,
-            "orifice_velocity": orifice_velocity,
-            "inlet_velocity": inlet_velocity,
-            "iteration_details": iteration_details  # Add iteration details to results
+            "details": details_final,
+            "orifice_velocity": orifice_velocity_final,
+            "inlet_velocity": inlet_velocity_final,
+            "iterations": iteration_count,
+            "converged": converged
         }
     
+    # Determine warnings and status
     warn = ""
+    status = "green"
+    
     # Check for insufficient capacity
-    if open_percent >= 100 and cv_valve < cv_req:
+    if final_op_point >= 100 and cv_valve_final < cv_req_final:
         warn = "Insufficient Capacity – Valve is undersized"
         status = "red"
-    elif open_percent < 20:
+    elif final_op_point < 20:
         warn = "Low opening (<20%)"
         status = "yellow"
-    elif open_percent > 80:
+    elif final_op_point > 80:
         warn = "High opening (>80%)"
         status = "yellow"
-    else:
-        status = "green"
     
     # Add velocity warning
     if velocity_warning:
@@ -1811,25 +1645,26 @@ def evaluate_valve_for_scenario(valve, scenario):
                 status = "yellow"
     
     # Override status based on flow conditions
-    if details.get('is_choked', False):
+    if details_final.get('is_choked', False):
         status = "red"
-    elif "Severe" in details.get('cavitation_severity', ""):
+    elif "Severe" in details_final.get('cavitation_severity', ""):
         status = "orange"
-    elif "Moderate" in details.get('cavitation_severity', ""):
+    elif "Moderate" in details_final.get('cavitation_severity', ""):
         status = "yellow"
     
     return {
-        "op_point": open_percent,
-        "req_cv": cv_req,
-        "theoretical_cv": details.get('theoretical_cv', 0),
+        "op_point": final_op_point,
+        "req_cv": cv_req_final,
+        "theoretical_cv": details_final.get('theoretical_cv', 0),
         "warning": warn,
-        "cavitation_info": details.get('cavitation_severity', "N/A"),
+        "cavitation_info": details_final.get('cavitation_severity', "N/A"),
         "status": status,
-        "margin": (cv_valve / cv_req - 1) * 100 if cv_req > 0 else 0,
-        "details": details,
-        "orifice_velocity": orifice_velocity,
-        "inlet_velocity": inlet_velocity,
-        "iteration_details": iteration_details  # Add iteration details to results
+        "margin": (cv_valve_final / cv_req_final - 1) * 100 if cv_req_final > 0 else 0,
+        "details": details_final,
+        "orifice_velocity": orifice_velocity_final,
+        "inlet_velocity": inlet_velocity_final,
+        "iterations": iteration_count,
+        "converged": converged
     }
 
 def find_recommended_valve(scenarios):
@@ -2926,54 +2761,7 @@ def main():
                 all_valves_table_html += f'<td>{valve_result["score"]:.1f}</td></tr>'
             all_valves_table_html += "</tbody></table>"
             st.markdown(all_valves_table_html, unsafe_allow_html=True)
-
-            # In the tab_results section, add this after the detailed calculations expander:
-
-            with st.expander(f"Iteration Details for {scenario['name']}"):
-                st.subheader("Iteration Process")
-                
-                if "iteration_details" in result:
-                    # Create a table for iteration details
-                    iteration_data = []
-                    for iter_detail in result["iteration_details"]:
-                        row = [
-                            iter_detail["iteration"],
-                            f"{iter_detail.get('opening_guess', 'N/A')}%",
-                            f"{iter_detail.get('fl_used', iter_detail.get('xt_used', 'N/A')):.4f}",
-                            f"{iter_detail['calculated_opening']}%",
-                            f"{iter_detail['cv_req']:.2f}",
-                            f"{iter_detail['cv_valve']:.2f}"
-                        ]
-                        iteration_data.append(row)
-                    
-                    # Create DataFrame for better display
-                    df_iterations = pd.DataFrame(
-                        iteration_data,
-                        columns=["Iteration", "Opening Guess", "Fl/Xt Used", "Calculated Opening", "Required Cv", "Valve Cv"]
-                    )
-                    st.dataframe(df_iterations, use_container_width=True)
-                    
-                    # Add some analysis
-                    if len(result["iteration_details"]) > 1:
-                        first_iter = result["iteration_details"][0]
-                        last_iter = result["iteration_details"][-1]
-                        
-                        st.markdown("**Convergence Analysis:**")
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Initial Opening", f"{first_iter['calculated_opening']}%")
-                        col2.metric("Final Opening", f"{last_iter['calculated_opening']}%")
-                        col3.metric("Iterations", len(result["iteration_details"]))
-                        
-                        if first_iter['calculated_opening'] == last_iter['calculated_opening']:
-                            st.success("✅ Iteration converged quickly")
-                        else:
-                            st.info("🔄 Iteration adjusted the opening point")
-                else:
-                    st.info("No iteration details available for this scenario")
-
-
-
-
+            
                
     # Handle export button
     if export_btn:
