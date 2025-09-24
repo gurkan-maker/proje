@@ -1384,12 +1384,11 @@ def calculate_valve_velocity(scenario, valve, op_point):
     else:
         velocity = 0
     
-    # Check against limits
-    velocity_warning = ""
+   
     if velocity > VELOCITY_LIMITS.get(scenario["fluid_type"], 10):
-        velocity_warning = f"High velocity ({velocity:.1f} m/s) for {scenario['fluid_type']}! (max {VELOCITY_LIMITS.get(scenario['fluid_type'], 10)} m/s)"
+        
     
-    return velocity, velocity_warning
+    return velocity
 
 # ========================
 # RECOMMENDED VALVE LOGIC
@@ -1641,14 +1640,7 @@ def evaluate_valve_for_scenario(valve, scenario):
     else:
         status = "green"
     
-    # Add velocity warning
-    if velocity_warning:
-        if warn:
-            warn += "; " + velocity_warning
-        else:
-            warn = velocity_warning
-            if status == "green":
-                status = "yellow"
+   
     
     # Override status based on flow conditions
     if details.get('is_choked', False):
