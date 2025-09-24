@@ -1406,10 +1406,7 @@ def evaluate_valve_for_scenario(valve, scenario):
     cv_100 = valve.get_cv_at_opening(100)
     fp = calculate_piping_factor_fp(valve_d, pipe_d, cv_100)
     
-    # Calculate velocity at full opening (initial)
-    orifice_velocity, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, 100)
-    velocity_warning = inlet_warning if inlet_warning else ""
-    
+       
     # Initialize variables for iterative calculation
     max_iterations = 20
     tolerance = 0.01  # 1% tolerance for convergence
@@ -1611,11 +1608,7 @@ def evaluate_valve_for_scenario(valve, scenario):
         else:
             details['cavitation_severity'] = "No choked flow"
     
-    # Recalculate velocity at final operating point
-    orifice_velocity, inlet_velocity, inlet_warning = calculate_valve_velocity(scenario, valve, open_percent)
-    new_velocity_warning = inlet_warning if inlet_warning else ""
-    velocity_warning = new_velocity_warning or velocity_warning
-    
+       
     if 'error' in details:
         return {
             "op_point": open_percent,
@@ -1626,8 +1619,7 @@ def evaluate_valve_for_scenario(valve, scenario):
             "status": "red",
             "margin": 0,
             "details": details,
-            "orifice_velocity": orifice_velocity,
-            "inlet_velocity": inlet_velocity,
+            
             "iterations": iterations,
             "converged": converged
         }
@@ -1675,8 +1667,7 @@ def evaluate_valve_for_scenario(valve, scenario):
         "status": status,
         "margin": (cv_valve / cv_req - 1) * 100 if cv_req > 0 else 0,
         "details": details,
-        "orifice_velocity": orifice_velocity,
-        "inlet_velocity": inlet_velocity,
+        
         "iterations": iterations,
         "converged": converged
     }
