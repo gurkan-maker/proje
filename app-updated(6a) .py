@@ -1805,35 +1805,29 @@ def scenario_input_form(scenario_num, scenario_data=None):
             key=f"fluid_library_{scenario_num}"
         )
     
-    # CRITICAL FIX: Update scenario_data BEFORE creating the dependent widgets
-    if fluid_library != "Select Fluid Library...":
-        fluid_data = FLUID_LIBRARY[fluid_library]
-        # Update the scenario_data with fluid library properties
-        scenario_data["fluid_type"] = fluid_data["type"]
-        
-        if fluid_data.get("sg") is not None:
-            scenario_data["sg"] = fluid_data["sg"]
-        
-        # Update other properties based on fluid type
-        if fluid_data["type"] == "liquid":
-            if fluid_data.get("visc_func"):
-                scenario_data["visc"] = fluid_data["visc_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("pv_func"):
-                scenario_data["pv"] = fluid_data["pv_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("pc_func"):
-                scenario_data["pc"] = fluid_data["pc_func"]()
-        elif fluid_data["type"] in ["gas", "steam"]:
-            if fluid_data.get("k_func"):
-                scenario_data["k"] = fluid_data["k_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data["type"] == "gas" and fluid_data.get("z_func"):
-                scenario_data["z"] = fluid_data["z_func"](scenario_data["temp"], scenario_data["p1"])
-        if fluid_data["type"] == "steam" and fluid_data.get("rho_func"):
-            scenario_data["rho"] = fluid_data["rho_func"](scenario_data["temp"], scenario_data["p1"])
-    
     with col2:
+        # MOVE THE FLUID PROPERTY UPDATE LOGIC HERE - BEFORE THE INPUT FIELDS
         if fluid_library != "Select Fluid Library...":
             fluid_data = FLUID_LIBRARY[fluid_library]
             fluid_type = fluid_data["type"]
+            scenario_data["fluid_type"] = fluid_type
+            
+            # Update all properties from the fluid library
+            if fluid_data.get("visc_func") and fluid_data["type"] == "liquid":
+                scenario_data["visc"] = fluid_data["visc_func"](scenario_data["temp"], scenario_data["p1"])
+            if fluid_data.get("k_func") and fluid_data["type"] in ["gas", "steam"]:
+                scenario_data["k"] = fluid_data["k_func"](scenario_data["temp"], scenario_data["p1"])
+            if fluid_data.get("pv_func") and fluid_data["type"] == "liquid":
+                scenario_data["pv"] = fluid_data["pv_func"](scenario_data["temp"], scenario_data["p1"])
+            if fluid_data.get("pc_func") and fluid_data["type"] == "liquid":
+                scenario_data["pc"] = fluid_data["pc_func"]()
+            if fluid_data.get("rho_func") and fluid_data["type"] == "steam":
+                scenario_data["rho"] = fluid_data["rho_func"](scenario_data["temp"], scenario_data["p1"])
+            if fluid_data.get("z_func") and fluid_data["type"] == "gas":
+                scenario_data["z"] = fluid_data["z_func"](scenario_data["temp"], scenario_data["p1"])
+            if fluid_data.get("sg") is not None:
+                scenario_data["sg"] = fluid_data["sg"]
+            
             st.text_input("Fluid Type", value=fluid_type.capitalize(), disabled=True, key=f"fluid_type_text_{scenario_num}")
         else:
             try:
@@ -1846,10 +1840,11 @@ def scenario_input_form(scenario_num, scenario_data=None):
                 index=index_val,
                 key=f"fluid_type_{scenario_num}"
             ).lower()
+            scenario_data["fluid_type"] = fluid_type
     
     col1, col2 = st.columns(2)
     with col1:
-        flow_label = "Flow Rate (m³/h)" if fluid_type == "liquid" else "Flow Rate (std m³/h)" if fluid_type == "gas" else "Flow Rate (kg/h)"
+        flow_label = "Flow Rate (m³/h)" if scenario_data["fluid_type"] == "liquid" else "Flow Rate (std m³/h)" if scenario_data["fluid_type"] == "gas" else "Flow Rate (kg/h)"
         flow_value = st.number_input(
             flow_label, 
             min_value=0.0, 
@@ -1884,24 +1879,25 @@ def scenario_input_form(scenario_num, scenario_data=None):
         )
     
     with col2:
-        # Use the UPDATED scenario_data values for the widgets
-        if fluid_type in ["liquid", "gas"]:
+        # REMOVED THE DUPLICATE FLUID PROPERTY UPDATE LOGIC FROM HERE
+        
+        if scenario_data["fluid_type"] in ["liquid", "gas"]:
             sg = st.number_input(
-                "Specific Gravity (water=1)" if fluid_type == "liquid" else "Specific Gravity (air=1)",
+                "Specific Gravity (water=1)" if scenario_data["fluid_type"] == "liquid" else "Specific Gravity (air=1)",
                 min_value=0.01, 
                 max_value=10.0, 
-                value=scenario_data["sg"],  # This now uses the updated value
+                value=scenario_data["sg"], 
                 step=0.01,
                 key=f"sg_{scenario_num}",
                 disabled=(fluid_library != "Select Fluid Library...")
             )
         
-        if fluid_type == "liquid":
+        if scenario_data["fluid_type"] == "liquid":
             visc = st.number_input(
                 "Viscosity (cSt)", 
                 min_value=0.01, 
                 max_value=10000.0, 
-                value=scenario_data["visc"],  # Updated value
+                value=scenario_data["visc"], 
                 step=0.1,
                 key=f"visc_{scenario_num}",
                 disabled=(fluid_library != "Select Fluid Library...")
@@ -1910,7 +1906,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
                 "Vapor Pressure (bar a)", 
                 min_value=0.0, 
                 max_value=100.0, 
-                value=scenario_data["pv"],  # Updated value
+                value=scenario_data["pv"], 
                 step=0.0001,
                 format="%.4f",
                 key=f"pv_{scenario_num}",
@@ -1920,40 +1916,51 @@ def scenario_input_form(scenario_num, scenario_data=None):
                 "Critical Pressure (bar a)", 
                 min_value=0.0, 
                 max_value=1000.0, 
-                value=scenario_data["pc"],  # Updated value
+                value=scenario_data["pc"], 
                 step=0.1,
                 key=f"pc_{scenario_num}",
                 disabled=(fluid_library != "Select Fluid Library...")
             )
         
-        if fluid_type in ["gas", "steam"]:
+        if scenario_data["fluid_type"] in ["gas", "steam"]:
             k = st.number_input(
                 "Specific Heat Ratio (k=Cp/Cv)", 
                 min_value=1.0, 
                 max_value=2.0, 
-                value=scenario_data["k"],  # Updated value
+                value=scenario_data["k"], 
                 step=0.01,
                 key=f"k_{scenario_num}",
                 disabled=(fluid_library != "Select Fluid Library...")
             )
         
-        if fluid_type == "gas":
-            z = st.number_input(
-                "Compressibility Factor (Z)", 
-                min_value=0.1, 
-                max_value=2.0, 
-                value=scenario_data["z"],  # Updated value
-                step=0.01,
-                key=f"z_{scenario_num}",
-                disabled=(fluid_library != "Select Fluid Library...")  # Always disabled for library fluids
-            )
+        if scenario_data["fluid_type"] == "gas":
+            if fluid_library != "Select Fluid Library...":
+                z = st.number_input(
+                    "Compressibility Factor (Z)", 
+                    min_value=0.1, 
+                    max_value=2.0, 
+                    value=scenario_data["z"], 
+                    step=0.01,
+                    key=f"z_{scenario_num}",
+                    disabled=True
+                )
+            else:
+                z = st.number_input(
+                    "Compressibility Factor (Z)", 
+                    min_value=0.1, 
+                    max_value=2.0, 
+                    value=scenario_data["z"], 
+                    step=0.01,
+                    key=f"z_{scenario_num}",
+                    disabled=False
+                )
         
-        if fluid_type == "steam":
+        if scenario_data["fluid_type"] == "steam":
             rho = st.number_input(
                 "Density (kg/m³)", 
                 min_value=0.01, 
                 max_value=2000.0, 
-                value=scenario_data["rho"],  # Updated value
+                value=scenario_data["rho"], 
                 step=0.1,
                 key=f"rho_{scenario_num}",
                 disabled=(fluid_library != "Select Fluid Library...")
@@ -1979,18 +1986,18 @@ def scenario_input_form(scenario_num, scenario_data=None):
     
     return {
         "name": scenario_name,
-        "fluid_type": fluid_type,
+        "fluid_type": scenario_data["fluid_type"],
         "flow": flow_value,
         "p1": p1,
         "p2": p2,
         "temp": temp,
-        "sg": sg if fluid_type in ["liquid", "gas"] else scenario_data["sg"],
-        "visc": visc if fluid_type == "liquid" else scenario_data["visc"],
-        "pv": pv if fluid_type == "liquid" else scenario_data["pv"],
-        "pc": pc if fluid_type == "liquid" else scenario_data["pc"],
-        "k": k if fluid_type in ["gas", "steam"] else scenario_data["k"],
-        "z": z if fluid_type == "gas" else scenario_data["z"],
-        "rho": rho if fluid_type == "steam" else scenario_data["rho"],
+        "sg": sg if scenario_data["fluid_type"] in ["liquid", "gas"] else scenario_data["sg"],
+        "visc": visc if scenario_data["fluid_type"] == "liquid" else scenario_data["visc"],
+        "pv": pv if scenario_data["fluid_type"] == "liquid" else scenario_data["pv"],
+        "pc": pc if scenario_data["fluid_type"] == "liquid" else scenario_data["pc"],
+        "k": k if scenario_data["fluid_type"] in ["gas", "steam"] else scenario_data["k"],
+        "z": z if scenario_data["fluid_type"] == "gas" else scenario_data["z"],
+        "rho": rho if scenario_data["fluid_type"] == "steam" else scenario_data["rho"],
         "pipe_d": pipe_d,
         "use_valve_size": use_valve_size,
         "fluid_library": fluid_library
