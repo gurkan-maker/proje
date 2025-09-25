@@ -1765,78 +1765,62 @@ def create_fluid_dropdown():
     return ["Select Fluid Library..."] + list(FLUID_LIBRARY.keys())
 
 def scenario_input_form(scenario_num, scenario_data=None):
+    # Default values
     default_values = {
         "use_valve_size": True,
-        "sg": 1.0,
-        "visc": 1.0,
-        "pv": 0.023,
-        "pc": 220.55,
-        "k": 1.4,
-        "z": 1.0,
-        "rho": 1.0,
-        "fluid_type": "liquid",
-        "pipe_d": 2.0
+        "pipe_d": 2.0,
+        "name": f"Scenario {scenario_num}"
     }
     
+    # Initialize scenario data with defaults
     if scenario_data is None:
-        scenario_data = {
-            "name": f"Scenario {scenario_num}",
-            "fluid_type": "liquid",
+        scenario_data = default_values.copy()
+        scenario_data.update({
             "flow": 10.0 if scenario_num == 1 else 50.0,
             "p1": 10.0,
             "p2": 6.0,
             "temp": 20.0,
-            "pipe_d": 2.0
-        }
-        scenario_data = {**default_values, **scenario_data}
+        })
     else:
-        for key, default in default_values.items():
-            if key not in scenario_data:
-                scenario_data[key] = default
+        scenario_data = {**default_values, **scenario_data}
     
     st.subheader(f"Scenario {scenario_num}")
-    scenario_name = st.text_input("Scenario Name", value=scenario_data["name"], key=f"name_{scenario_num}")
+    
+    # Scenario name
+    scenario_name = st.text_input("Scenario Name", 
+                                 value=scenario_data["name"], 
+                                 key=f"name_{scenario_num}")
     
     col1, col2 = st.columns(2)
-    with col1:
-        # Önce fluid type seçimi
-        try:
-            index_val = ["Liquid", "Gas", "Steam"].index(scenario_data["fluid_type"].capitalize())
-        except (ValueError, AttributeError):
-            index_val = 0
-        
-        fluid_type = st.selectbox(
-            "Fluid Type", 
-            ["Liquid", "Gas", "Steam"], 
-            index=index_val,
-            key=f"fluid_type_{scenario_num}"
-        ).lower()
     
-    with col2:
-        # Fluid library'yi fluid type'a göre filtrele
-        available_fluids = ["Select Fluid Library..."]
-        for fluid_name, fluid_data in FLUID_LIBRARY.items():
-            if fluid_data["type"] == fluid_type:
-                available_fluids.append(fluid_name)
-        
-        # Önceki seçimi koru (eğer hala geçerliyse)
-        previous_selection = scenario_data.get("fluid_library", "Select Fluid Library...")
-        if previous_selection not in available_fluids:
-            previous_selection = "Select Fluid Library..."
-        
+    with col1:
+        # Fluid Library selection (this determines everything)
         fluid_library = st.selectbox(
-            "Fluid Library", 
-            available_fluids, 
-            index=available_fluids.index(previous_selection) if previous_selection in available_fluids else 0,
+            "Select Fluid", 
+            ["Select Fluid..."] + list(FLUID_LIBRARY.keys()),
             key=f"fluid_library_{scenario_num}"
         )
         
-        # Fluid type'ı göster (read-only)
-        st.text_input("Fluid Type", value=fluid_type.capitalize(), disabled=True, key=f"fluid_type_text_{scenario_num}")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        flow_label = "Flow Rate (m³/h)" if fluid_type == "liquid" else "Flow Rate (std m³/h)" if fluid_type == "gas" else "Flow Rate (kg/h)"
+        # Show fluid type based on selection (read-only)
+        if fluid_library != "Select Fluid...":
+            fluid_type = FLUID_LIBRARY[fluid_library]["type"]
+            st.text_input("Fluid Type", 
+                         value=fluid_type.capitalize(), 
+                         disabled=True,
+                         key=f"fluid_type_display_{scenario_num}")
+        else:
+            st.text_input("Fluid Type", 
+                         value="Select a fluid first", 
+                         disabled=True,
+                         key=f"fluid_type_display_{scenario_num}")
+        
+        # Process conditions
+        if fluid_library != "Select Fluid...":
+            fluid_type = FLUID_LIBRARY[fluid_library]["type"]
+            flow_label = "Flow Rate (m³/h)" if fluid_type == "liquid" else "Flow Rate (std m³/h)" if fluid_type == "gas" else "Flow Rate (kg/h)"
+        else:
+            flow_label = "Flow Rate"
+            
         flow_value = st.number_input(
             flow_label, 
             min_value=0.0, 
@@ -1845,6 +1829,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
             step=0.1,
             key=f"flow_{scenario_num}"
         )
+        
         p1 = st.number_input(
             "Inlet Pressure (bar a)", 
             min_value=0.0, 
@@ -1853,6 +1838,7 @@ def scenario_input_form(scenario_num, scenario_data=None):
             step=0.1,
             key=f"p1_{scenario_num}"
         )
+        
         p2 = st.number_input(
             "Outlet Pressure (bar a)", 
             min_value=0.0, 
@@ -1861,6 +1847,8 @@ def scenario_input_form(scenario_num, scenario_data=None):
             step=0.1,
             key=f"p2_{scenario_num}"
         )
+    
+    with col2:
         temp = st.number_input(
             "Temperature (°C)", 
             min_value=-200.0, 
@@ -1869,159 +1857,8 @@ def scenario_input_form(scenario_num, scenario_data=None):
             step=1.0,
             key=f"temp_{scenario_num}"
         )
-    
-    with col2:
-        # Hesaplama butonu - tüm veriler girildikten sonra
-        st.markdown("### Fluid Properties")
-        calculate_props = st.button("Calculate Fluid Properties", 
-                                  key=f"calculate_props_{scenario_num}",
-                                  use_container_width=True)
         
-        # Bağımsız değişkenler
-        independent_vars = {
-            "fluid_library": fluid_library,
-            "p1": p1,
-            "temp": temp,
-            "fluid_type": fluid_type
-        }
-        
-        # Bağımlı değişkenler için geçici depolama
-        dependent_vars = scenario_data.copy()
-        
-        # Hesaplama butonuna basıldığında fluid properties'i güncelle
-        if calculate_props:
-            if fluid_library != "Select Fluid Library...":
-                try:
-                    fluid_data = FLUID_LIBRARY[fluid_library]
-                    
-                    # Tüm fluid properties'leri hesapla
-                    if fluid_data.get("visc_func") and fluid_type == "liquid":
-                        dependent_vars["visc"] = fluid_data["visc_func"](temp, p1)
-                    
-                    if fluid_data.get("k_func") and fluid_type in ["gas", "steam"]:
-                        dependent_vars["k"] = fluid_data["k_func"](temp, p1)
-                    
-                    if fluid_data.get("pv_func") and fluid_type == "liquid":
-                        dependent_vars["pv"] = fluid_data["pv_func"](temp, p1)
-                    
-                    if fluid_data.get("pc_func") and fluid_type == "liquid":
-                        dependent_vars["pc"] = fluid_data["pc_func"]()
-                    
-                    if fluid_data.get("rho_func") and fluid_type == "steam":
-                        dependent_vars["rho"] = fluid_data["rho_func"](temp, p1)
-                    
-                    if fluid_data.get("z_func") and fluid_type == "gas":
-                        dependent_vars["z"] = fluid_data["z_func"](temp, p1)
-                    
-                    if fluid_data.get("sg") is not None:
-                        dependent_vars["sg"] = fluid_data["sg"]
-                    
-                    st.success("Fluid properties calculated successfully!")
-                    
-                except Exception as e:
-                    st.error(f"Error calculating fluid properties: {str(e)}")
-            else:
-                st.info("Select a fluid from the library to calculate properties automatically.")
-        
-        # Fluid properties input alanları
-        if fluid_type in ["liquid", "gas"]:
-            sg_disabled = (fluid_library != "Select Fluid Library...")
-            sg_value = dependent_vars["sg"] if fluid_library != "Select Fluid Library..." else scenario_data["sg"]
-            
-            sg = st.number_input(
-                "Specific Gravity (water=1)" if fluid_type == "liquid" else "Specific Gravity (air=1)",
-                min_value=0.01, 
-                max_value=10.0, 
-                value=sg_value, 
-                step=0.01,
-                key=f"sg_{scenario_num}",
-                disabled=sg_disabled
-            )
-        
-        if fluid_type == "liquid":
-            visc_disabled = (fluid_library != "Select Fluid Library...")
-            visc_value = dependent_vars["visc"] if fluid_library != "Select Fluid Library..." else scenario_data["visc"]
-            
-            visc = st.number_input(
-                "Viscosity (cSt)", 
-                min_value=0.01, 
-                max_value=10000.0, 
-                value=visc_value, 
-                step=0.1,
-                key=f"visc_{scenario_num}",
-                disabled=visc_disabled
-            )
-            
-            pv_disabled = (fluid_library != "Select Fluid Library...")
-            pv_value = dependent_vars["pv"] if fluid_library != "Select Fluid Library..." else scenario_data["pv"]
-            
-            pv = st.number_input(
-                "Vapor Pressure (bar a)", 
-                min_value=0.0, 
-                max_value=100.0, 
-                value=pv_value, 
-                step=0.0001,
-                format="%.4f",
-                key=f"pv_{scenario_num}",
-                disabled=pv_disabled
-            )
-            
-            pc_disabled = (fluid_library != "Select Fluid Library...")
-            pc_value = dependent_vars["pc"] if fluid_library != "Select Fluid Library..." else scenario_data["pc"]
-            
-            pc = st.number_input(
-                "Critical Pressure (bar a)", 
-                min_value=0.0, 
-                max_value=1000.0, 
-                value=pc_value, 
-                step=0.1,
-                key=f"pc_{scenario_num}",
-                disabled=pc_disabled
-            )
-        
-        if fluid_type in ["gas", "steam"]:
-            k_disabled = (fluid_library != "Select Fluid Library...")
-            k_value = dependent_vars["k"] if fluid_library != "Select Fluid Library..." else scenario_data["k"]
-            
-            k = st.number_input(
-                "Specific Heat Ratio (k=Cp/Cv)", 
-                min_value=1.0, 
-                max_value=2.0, 
-                value=k_value, 
-                step=0.01,
-                key=f"k_{scenario_num}",
-                disabled=k_disabled
-            )
-        
-        if fluid_type == "gas":
-            z_disabled = (fluid_library != "Select Fluid Library...")
-            z_value = dependent_vars["z"] if fluid_library != "Select Fluid Library..." else scenario_data["z"]
-            
-            z = st.number_input(
-                "Compressibility Factor (Z)", 
-                min_value=0.1, 
-                max_value=2.0, 
-                value=z_value, 
-                step=0.01,
-                key=f"z_{scenario_num}",
-                disabled=z_disabled
-            )
-        
-        if fluid_type == "steam":
-            rho_disabled = (fluid_library != "Select Fluid Library...")
-            rho_value = dependent_vars["rho"] if fluid_library != "Select Fluid Library..." else scenario_data["rho"]
-            
-            rho = st.number_input(
-                "Density (kg/m³)", 
-                min_value=0.01, 
-                max_value=2000.0, 
-                value=rho_value, 
-                step=0.1,
-                key=f"rho_{scenario_num}",
-                disabled=rho_disabled
-            )
-        
-        # Pipe diameter seçeneği
+        # Pipe diameter option
         use_valve_size = st.checkbox(
             "Use valve size for pipe diameter?",
             value=scenario_data.get("use_valve_size", True),
@@ -2039,32 +1876,113 @@ def scenario_input_form(scenario_num, scenario_data=None):
             )
         else:
             pipe_d = scenario_data["pipe_d"]
+        
+        # Display area for calculated properties (initially empty)
+        st.markdown("### Fluid Properties (Calculated)")
+        st.markdown("*Properties will be calculated when you press 'Calculate Opening'*")
+        
+        # Placeholder for calculated properties display
+        calc_props_placeholder = st.empty()
     
-    # Sonuçları birleştir
+    # Compile basic scenario data (properties will be calculated later)
     result = {
         "name": scenario_name,
-        "fluid_type": fluid_type,
         "flow": flow_value,
         "p1": p1,
         "p2": p2,
         "temp": temp,
-        "sg": sg if fluid_type in ["liquid", "gas"] else scenario_data["sg"],
-        "visc": visc if fluid_type == "liquid" else scenario_data["visc"],
-        "pv": pv if fluid_type == "liquid" else scenario_data["pv"],
-        "pc": pc if fluid_type == "liquid" else scenario_data["pc"],
-        "k": k if fluid_type in ["gas", "steam"] else scenario_data["k"],
-        "z": z if fluid_type == "gas" else scenario_data["z"],
-        "rho": rho if fluid_type == "steam" else scenario_data["rho"],
         "pipe_d": pipe_d,
         "use_valve_size": use_valve_size,
         "fluid_library": fluid_library
     }
     
-    # Hesaplanan değerleri güncelle (eğer hesaplama yapıldıysa)
-    if calculate_props and fluid_library != "Select Fluid Library...":
-        result.update(dependent_vars)
-    
     return result
+
+def calculate_fluid_properties(scenario):
+    """Calculate all fluid properties based on selected fluid, pressure, and temperature"""
+    if scenario["fluid_library"] == "Select Fluid...":
+        return scenario  # No calculation if no fluid selected
+    
+    fluid_data = FLUID_LIBRARY[scenario["fluid_library"]]
+    fluid_type = fluid_data["type"]
+    p1 = scenario["p1"]
+    temp = scenario["temp"]
+    
+    # Calculate all properties
+    try:
+        # Density function is available for all fluids
+        if fluid_data.get("rho_func"):
+            scenario["rho"] = fluid_data["rho_func"](temp, p1)
+        
+        # Specific Gravity
+        if fluid_type == "liquid":
+            # For liquids, SG = density/water_density
+            water_density = calculate_density("Water", temp, p1)
+            scenario["sg"] = scenario["rho"] / water_density if water_density > 0 else 1.0
+        elif fluid_type == "gas":
+            # For gases, SG = density/air_density
+            air_density = calculate_density("air", temp, p1)
+            scenario["sg"] = scenario["rho"] / air_density if air_density > 0 else 1.0
+        else:  # steam
+            scenario["sg"] = 1.0  # Steam SG is not typically used in the same way
+        
+        # Type-specific properties
+        if fluid_type == "liquid":
+            if fluid_data.get("visc_func"):
+                scenario["visc"] = fluid_data["visc_func"](temp, p1)
+            if fluid_data.get("pv_func"):
+                scenario["pv"] = fluid_data["pv_func"](temp, p1)
+            if fluid_data.get("pc_func"):
+                scenario["pc"] = fluid_data["pc_func"]()
+        
+        if fluid_type in ["gas", "steam"]:
+            if fluid_data.get("k_func"):
+                scenario["k"] = fluid_data["k_func"](temp, p1)
+        
+        if fluid_type == "gas":
+            if fluid_data.get("z_func"):
+                scenario["z"] = fluid_data["z_func"](temp, p1)
+        
+        # Set fluid type
+        scenario["fluid_type"] = fluid_type
+        
+    except Exception as e:
+        st.error(f"Error calculating fluid properties: {str(e)}")
+        # Set defaults in case of error
+        scenario["fluid_type"] = fluid_type
+        scenario["sg"] = 1.0
+        if fluid_type == "liquid":
+            scenario["visc"] = 1.0
+            scenario["pv"] = 0.023
+            scenario["pc"] = 220.55
+        elif fluid_type in ["gas", "steam"]:
+            scenario["k"] = 1.4
+        if fluid_type == "gas":
+            scenario["z"] = 1.0
+    
+    return scenario
+
+def display_calculated_properties(scenario):
+    """Display calculated fluid properties in a formatted way"""
+    if scenario["fluid_library"] == "Select Fluid...":
+        return "No fluid selected"
+    
+    props_text = []
+    props_text.append(f"**Fluid Type:** {scenario['fluid_type'].capital()}")
+    props_text.append(f"**Specific Gravity:** {scenario.get('sg', 'N/A'):.3f}")
+    
+    if scenario["fluid_type"] == "liquid":
+        props_text.append(f"**Viscosity:** {scenario.get('visc', 'N/A'):.1f} cSt")
+        props_text.append(f"**Vapor Pressure:** {scenario.get('pv', 'N/A'):.4f} bar a")
+        props_text.append(f"**Critical Pressure:** {scenario.get('pc', 'N/A'):.1f} bar a")
+    elif scenario["fluid_type"] == "gas":
+        props_text.append(f"**Specific Heat Ratio (k):** {scenario.get('k', 'N/A'):.3f}")
+        props_text.append(f"**Compressibility Factor (Z):** {scenario.get('z', 'N/A'):.3f}")
+    elif scenario["fluid_type"] == "steam":
+        props_text.append(f"**Density:** {scenario.get('rho', 'N/A'):.2f} kg/m³")
+        props_text.append(f"**Specific Heat Ratio (k):** {scenario.get('k', 'N/A'):.3f}")
+    
+    return "\n".join(props_text)
 
 def plot_cv_curve(valve, op_points, req_cvs, theoretical_cvs, scenario_names):
     # Get valve's Cv characteristics
@@ -2523,26 +2441,55 @@ def main():
     
     tab1, tab2, tab3, tab_results = st.tabs(["Scenario 1", "Scenario 2", "Scenario 3", "Results"])
     
+    def scenario_input_form_with_calculation(scenario_num, scenario_data=None):
+        # Use the new scenario_input_form
+        scenario = scenario_input_form(scenario_num, scenario_data)
+        
+        # When Calculate Opening is pressed, calculate and display properties
+        if st.session_state.get('calculate_pressed', False):
+            if scenario["fluid_library"] != "Select Fluid...":
+                try:
+                    # Calculate properties
+                    scenario_with_props = calculate_fluid_properties(scenario.copy())
+                    
+                    # Display calculated properties
+                    st.sidebar.markdown(f"### Scenario {scenario_num} - Calculated Properties")
+                    st.sidebar.markdown(display_calculated_properties(scenario_with_props))
+                    
+                    return scenario_with_props
+                except Exception as e:
+                    st.error(f"Error in scenario {scenario_num}: {str(e)}")
+        
+        return scenario
+    
+    # Update the tabs to use the new form
     with tab1:
-        scenario1 = scenario_input_form(1)
+        scenario1 = scenario_input_form_with_calculation(1)
     with tab2:
-        scenario2 = scenario_input_form(2)
+        scenario2 = scenario_input_form_with_calculation(2)
     with tab3:
-        scenario3 = scenario_input_form(3)
+        scenario3 = scenario_input_form_with_calculation(3)
     
-    scenarios = []
-    if scenario1["flow"] > 0:
-        scenarios.append(scenario1)
-    if scenario2["flow"] > 0:
-        scenarios.append(scenario2)
-    if scenario3["flow"] > 0:
-        scenarios.append(scenario3)
-    st.session_state.scenarios = scenarios
-    
+    # Modify the calculate button section
     if calculate_btn:
+        st.session_state.calculate_pressed = True
+        
+        # Re-collect scenarios with calculated properties
+        scenarios = []
+        for i, scenario_func in enumerate([scenario1, scenario2, scenario3], 1):
+            if scenario_func["flow"] > 0 and scenario_func["fluid_library"] != "Select Fluid...":
+                try:
+                    scenario_with_props = calculate_fluid_properties(scenario_func.copy())
+                    scenarios.append(scenario_with_props)
+                except Exception as e:
+                    st.error(f"Error calculating properties for Scenario {i}: {str(e)}")
+        
         if not scenarios:
-            st.error("Please define at least one scenario with flow > 0.")
+            st.error("Please define at least one scenario with a valid fluid selection and flow > 0.")
             st.stop()
+            
+        st.session_state.scenarios = scenarios
+        
         try:
             selected_valve_results = []
             for scenario in scenarios:
