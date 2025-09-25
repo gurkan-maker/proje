@@ -1799,51 +1799,23 @@ def scenario_input_form(scenario_num, scenario_data=None):
     
     col1, col2 = st.columns(2)
     with col1:
+        # Zorunlu akışkan kütüphanesi seçimi - "Select Fluid Library..." kaldırıldı
         fluid_library = st.selectbox(
             "Fluid Library", 
-            create_fluid_dropdown(), 
+            list(FLUID_LIBRARY.keys()), 
+            index=0,  # Varsayılan olarak ilk akışkan seçili
             key=f"fluid_library_{scenario_num}"
         )
     
     with col2:
-        # Fluid type display - always show but make it clear when it's from library
-        if fluid_library != "Select Fluid Library...":
-            fluid_data = FLUID_LIBRARY[fluid_library]
-            fluid_type = fluid_data["type"]
-            scenario_data["fluid_type"] = fluid_type
-            
-            # Update all properties from the fluid library
-            if fluid_data.get("visc_func") and fluid_data["type"] == "liquid":
-                scenario_data["visc"] = fluid_data["visc_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("k_func") and fluid_data["type"] in ["gas", "steam"]:
-                scenario_data["k"] = fluid_data["k_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("pv_func") and fluid_data["type"] == "liquid":
-                scenario_data["pv"] = fluid_data["pv_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("pc_func") and fluid_data["type"] == "liquid":
-                scenario_data["pc"] = fluid_data["pc_func"]()
-            if fluid_data.get("rho_func") and fluid_data["type"] == "steam":
-                scenario_data["rho"] = fluid_data["rho_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("z_func") and fluid_data["type"] == "gas":
-                scenario_data["z"] = fluid_data["z_func"](scenario_data["temp"], scenario_data["p1"])
-            if fluid_data.get("sg") is not None:
-                scenario_data["sg"] = fluid_data["sg"]
-            
-            # Show fluid type as read-only with library indication
-            st.text_input("Fluid Type", value=f"{fluid_type.capitalize()} (from {fluid_library})", 
-                         disabled=True, key=f"fluid_type_text_{scenario_num}")
-        else:
-            # Allow manual selection when no library is selected
-            try:
-                index_val = ["Liquid", "Gas", "Steam"].index(scenario_data["fluid_type"].capitalize())
-            except (ValueError, AttributeError):
-                index_val = 0
-            fluid_type = st.selectbox(
-                "Fluid Type", 
-                ["Liquid", "Gas", "Steam"], 
-                index=index_val,
-                key=f"fluid_type_{scenario_num}"
-            ).lower()
-            scenario_data["fluid_type"] = fluid_type
+        # Akışkan tipini otomatik belirle ve kilitle
+        fluid_data = FLUID_LIBRARY[fluid_library]
+        fluid_type = fluid_data["type"]
+        scenario_data["fluid_type"] = fluid_type
+        
+        # Akışkan tipini görüntüle (değiştirilemez)
+        st.text_input("Fluid Type", value=f"{fluid_type.capitalize()} - {fluid_library}", 
+                     disabled=True, key=f"fluid_type_text_{scenario_num}")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -1882,112 +1854,141 @@ def scenario_input_form(scenario_num, scenario_data=None):
         )
     
     with col2:
-        # Fluid properties section - make them read-only when fluid library is selected
-        if scenario_data["fluid_type"] in ["liquid", "gas"]:
-            sg_disabled = (fluid_library != "Select Fluid Library...")
-            sg_value = scenario_data["sg"]
-            sg = st.number_input(
-                "Specific Gravity (water=1)" if scenario_data["fluid_type"] == "liquid" else "Specific Gravity (air=1)",
+        # Tüm akışkan özelliklerini otomatik hesapla ve kilitle
+        st.markdown("**Fluid Properties (Automatically Calculated)**")
+        
+        # Akışkan bilgisi
+        st.success(f"Selected: {fluid_library}")
+        st.info(f"Properties calculated at {temp}°C and {p1} bar")
+        
+        # Özellikleri akışkan kütüphanesinden otomatik hesapla
+        try:
+            # Specific Gravity
+            sg_value = fluid_data.get("sg", 1.0)
+            if fluid_data.get("rho_func"):
+                # Yoğunluk fonksiyonu varsa, specific gravity'yi hesapla
+                actual_density = fluid_data["rho_func"](temp, p1)
+                if fluid_type == "liquid":
+                    sg_value = actual_density / WATER_DENSITY_4C
+                else:  # gas
+                    sg_value = actual_density / air_DENSITY_0C
+            
+            scenario_data["sg"] = sg_value
+            st.number_input(
+                "Specific Gravity (water=1 for liquid, air=1 for gas)",
                 min_value=0.01, 
                 max_value=10.0, 
-                value=sg_value, 
-                step=0.01,
+                value=float(sg_value), 
+                step=0.001,
+                format="%.3f",
                 key=f"sg_{scenario_num}",
-                disabled=sg_disabled
+                disabled=True
             )
-            # Update scenario data only if not from library
-            if not sg_disabled:
-                scenario_data["sg"] = sg
-        
-        if scenario_data["fluid_type"] == "liquid":
-            visc_disabled = (fluid_library != "Select Fluid Library...")
-            visc_value = scenario_data["visc"]
-            visc = st.number_input(
-                "Viscosity (cSt)", 
-                min_value=0.01, 
-                max_value=10000.0, 
-                value=visc_value, 
-                step=0.1,
-                key=f"visc_{scenario_num}",
-                disabled=visc_disabled
-            )
-            if not visc_disabled:
-                scenario_data["visc"] = visc
             
-            pv_disabled = (fluid_library != "Select Fluid Library...")
-            pv_value = scenario_data["pv"]
-            pv = st.number_input(
-                "Vapor Pressure (bar a)", 
-                min_value=0.0, 
-                max_value=100.0, 
-                value=pv_value, 
-                step=0.0001,
-                format="%.4f",
-                key=f"pv_{scenario_num}",
-                disabled=pv_disabled
-            )
-            if not pv_disabled:
-                scenario_data["pv"] = pv
-            
-            pc_disabled = (fluid_library != "Select Fluid Library...")
-            pc_value = scenario_data["pc"]
-            pc = st.number_input(
-                "Critical Pressure (bar a)", 
-                min_value=0.0, 
-                max_value=1000.0, 
-                value=pc_value, 
-                step=0.1,
-                key=f"pc_{scenario_num}",
-                disabled=pc_disabled
-            )
-            if not pc_disabled:
-                scenario_data["pc"] = pc
+            # Akışkan tipine göre özellikleri göster
+            if fluid_type == "liquid":
+                # Viskozite
+                visc_value = fluid_data["visc_func"](temp, p1) if fluid_data.get("visc_func") else 1.0
+                scenario_data["visc"] = visc_value
+                st.number_input(
+                    "Viscosity (cSt)", 
+                    min_value=0.01, 
+                    max_value=10000.0, 
+                    value=float(visc_value), 
+                    step=0.1,
+                    key=f"visc_{scenario_num}",
+                    disabled=True
+                )
+                
+                # Buhar basıncı
+                pv_value = fluid_data["pv_func"](temp, p1) if fluid_data.get("pv_func") else 0.023
+                scenario_data["pv"] = pv_value
+                st.number_input(
+                    "Vapor Pressure (bar a)", 
+                    min_value=0.0, 
+                    max_value=100.0, 
+                    value=float(pv_value), 
+                    step=0.0001,
+                    format="%.4f",
+                    key=f"pv_{scenario_num}",
+                    disabled=True
+                )
+                
+                # Kritik basınç
+                pc_value = fluid_data["pc_func"]() if fluid_data.get("pc_func") else 220.55
+                scenario_data["pc"] = pc_value
+                st.number_input(
+                    "Critical Pressure (bar a)", 
+                    min_value=0.0, 
+                    max_value=1000.0, 
+                    value=float(pc_value), 
+                    step=0.1,
+                    key=f"pc_{scenario_num}",
+                    disabled=True
+                )
+                
+            elif fluid_type == "gas":
+                # Spesifik ısı oranı
+                k_value = fluid_data["k_func"](temp, p1) if fluid_data.get("k_func") else 1.4
+                scenario_data["k"] = k_value
+                st.number_input(
+                    "Specific Heat Ratio (k=Cp/Cv)", 
+                    min_value=1.0, 
+                    max_value=2.0, 
+                    value=float(k_value), 
+                    step=0.01,
+                    key=f"k_{scenario_num}",
+                    disabled=True
+                )
+                
+                # Sıkıştırılabilirlik faktörü
+                z_value = fluid_data["z_func"](temp, p1) if fluid_data.get("z_func") else 1.0
+                scenario_data["z"] = z_value
+                st.number_input(
+                    "Compressibility Factor (Z)", 
+                    min_value=0.1, 
+                    max_value=2.0, 
+                    value=float(z_value), 
+                    step=0.01,
+                    key=f"z_{scenario_num}",
+                    disabled=True
+                )
+                
+            else:  # steam
+                # Yoğunluk
+                rho_value = fluid_data["rho_func"](temp, p1) if fluid_data.get("rho_func") else 1.0
+                scenario_data["rho"] = rho_value
+                st.number_input(
+                    "Density (kg/m³)", 
+                    min_value=0.01, 
+                    max_value=2000.0, 
+                    value=float(rho_value), 
+                    step=0.1,
+                    key=f"rho_{scenario_num}",
+                    disabled=True
+                )
+                
+                # Spesifik ısı oranı
+                k_value = fluid_data["k_func"](temp, p1) if fluid_data.get("k_func") else 1.33
+                scenario_data["k"] = k_value
+                st.number_input(
+                    "Specific Heat Ratio (k=Cp/Cv)", 
+                    min_value=1.0, 
+                    max_value=2.0, 
+                    value=float(k_value), 
+                    step=0.01,
+                    key=f"k_{scenario_num}",
+                    disabled=True
+                )
+                
+        except Exception as e:
+            st.error(f"Error calculating fluid properties: {str(e)}")
+            # Hata durumunda varsayılan değerleri kullan
+            for prop in ["sg", "visc", "pv", "pc", "k", "z", "rho"]:
+                if prop in default_values:
+                    scenario_data[prop] = default_values[prop]
         
-        if scenario_data["fluid_type"] in ["gas", "steam"]:
-            k_disabled = (fluid_library != "Select Fluid Library...")
-            k_value = scenario_data["k"]
-            k = st.number_input(
-                "Specific Heat Ratio (k=Cp/Cv)", 
-                min_value=1.0, 
-                max_value=2.0, 
-                value=k_value, 
-                step=0.01,
-                key=f"k_{scenario_num}",
-                disabled=k_disabled
-            )
-            if not k_disabled:
-                scenario_data["k"] = k
-        
-        if scenario_data["fluid_type"] == "gas":
-            z_disabled = (fluid_library != "Select Fluid Library...")
-            z_value = scenario_data["z"]
-            z = st.number_input(
-                "Compressibility Factor (Z)", 
-                min_value=0.1, 
-                max_value=2.0, 
-                value=z_value, 
-                step=0.01,
-                key=f"z_{scenario_num}",
-                disabled=z_disabled
-            )
-            if not z_disabled:
-                scenario_data["z"] = z
-        
-        if scenario_data["fluid_type"] == "steam":
-            rho_disabled = (fluid_library != "Select Fluid Library...")
-            rho_value = scenario_data["rho"]
-            rho = st.number_input(
-                "Density (kg/m³)", 
-                min_value=0.01, 
-                max_value=2000.0, 
-                value=rho_value, 
-                step=0.1,
-                key=f"rho_{scenario_num}",
-                disabled=rho_disabled
-            )
-            if not rho_disabled:
-                scenario_data["rho"] = rho
-        
+        # Boru çapı seçimi (manuel girişe izin ver)
         use_valve_size = st.checkbox(
             "Use valve size for pipe diameter?",
             value=scenario_data.get("use_valve_size", True),
